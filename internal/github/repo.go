@@ -6,6 +6,45 @@ import (
 	gh "github.com/google/go-github/v68/github"
 )
 
+// ListRepos fetches all repositories for the given owner (paginated).
+func (c *Client) ListRepos(owner string, isOrg bool) ([]*gh.Repository, error) {
+	var allRepos []*gh.Repository
+	opts := &gh.RepositoryListByOrgOptions{
+		ListOptions: gh.ListOptions{PerPage: 100},
+	}
+	userOpts := &gh.RepositoryListByUserOptions{
+		ListOptions: gh.ListOptions{PerPage: 100},
+	}
+
+	for {
+		var repos []*gh.Repository
+		var resp *gh.Response
+		var err error
+
+		if isOrg {
+			repos, resp, err = c.Repositories.ListByOrg(c.ctx, owner, opts)
+		} else {
+			repos, resp, err = c.Repositories.ListByUser(c.ctx, owner, userOpts)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		allRepos = append(allRepos, repos...)
+
+		if resp.NextPage == 0 {
+			break
+		}
+		if isOrg {
+			opts.Page = resp.NextPage
+		} else {
+			userOpts.Page = resp.NextPage
+		}
+	}
+
+	return allRepos, nil
+}
+
 // GetRepo fetches a repository. Returns nil if not found.
 func (c *Client) GetRepo(owner, name string) (*gh.Repository, error) {
 	repo, resp, err := c.Repositories.Get(c.ctx, owner, name)

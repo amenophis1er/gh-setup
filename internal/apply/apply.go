@@ -29,9 +29,40 @@ func Run(cfg *config.Config, opts Options) error {
 
 	var errs []string
 
+	repos := cfg.Repos
+	if cfg.RepoScope == "all" {
+		discovered, err := client.ListRepos(owner, isOrg)
+		if err != nil {
+			return fmt.Errorf("listing repos: %w", err)
+		}
+
+		overrides := make(map[string]config.Repo)
+		for _, r := range cfg.Repos {
+			overrides[r.Name] = r
+		}
+
+		merged := make([]config.Repo, 0, len(discovered))
+		seen := make(map[string]bool)
+		for _, d := range discovered {
+			name := d.GetName()
+			seen[name] = true
+			if override, ok := overrides[name]; ok {
+				merged = append(merged, override)
+			} else {
+				merged = append(merged, config.Repo{Name: name})
+			}
+		}
+		for _, r := range cfg.Repos {
+			if !seen[r.Name] {
+				merged = append(merged, r)
+			}
+		}
+		repos = merged
+	}
+
 	// Apply repos
 	logHeader("Repositories")
-	for _, repo := range cfg.Repos {
+	for _, repo := range repos {
 		if err := applyRepo(client, cfg, owner, isOrg, repo, opts); err != nil {
 			logError("apply", repo.Name, err)
 			errs = append(errs, fmt.Sprintf("repo %s: %s", repo.Name, err))

@@ -25,8 +25,40 @@ func Run(cfg *config.Config) error {
 	}
 
 	owner := cfg.Account.Name
+	isOrg := cfg.Account.Type == "organization"
 
-	for _, repo := range cfg.Repos {
+	repos := cfg.Repos
+	if cfg.RepoScope == "all" {
+		discovered, err := client.ListRepos(owner, isOrg)
+		if err != nil {
+			return fmt.Errorf("listing repos: %w", err)
+		}
+
+		overrides := make(map[string]config.Repo)
+		for _, r := range cfg.Repos {
+			overrides[r.Name] = r
+		}
+
+		merged := make([]config.Repo, 0, len(discovered))
+		seen := make(map[string]bool)
+		for _, d := range discovered {
+			name := d.GetName()
+			seen[name] = true
+			if override, ok := overrides[name]; ok {
+				merged = append(merged, override)
+			} else {
+				merged = append(merged, config.Repo{Name: name})
+			}
+		}
+		for _, r := range cfg.Repos {
+			if !seen[r.Name] {
+				merged = append(merged, r)
+			}
+		}
+		repos = merged
+	}
+
+	for _, repo := range repos {
 		diffRepo(client, cfg, owner, repo)
 	}
 

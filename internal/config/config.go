@@ -16,6 +16,7 @@ type Config struct {
 	Account    Account    `yaml:"account"`
 	Defaults   Defaults   `yaml:"defaults"`
 	Labels     Labels     `yaml:"labels"`
+	RepoScope  string     `yaml:"repo_scope,omitempty"`
 	Repos      []Repo     `yaml:"repos"`
 	Teams      []Team     `yaml:"teams,omitempty"`
 	Governance Governance `yaml:"governance"`
@@ -137,6 +138,10 @@ func (c *Config) Validate() error {
 	validPresets := map[string]bool{"none": true, "basic": true, "standard": true, "strict": true, "custom": true}
 	if c.Defaults.BranchProtection.Preset != "" && !validPresets[c.Defaults.BranchProtection.Preset] {
 		errs = append(errs, fmt.Sprintf("branch_protection.preset %q is not valid", c.Defaults.BranchProtection.Preset))
+	}
+
+	if c.RepoScope != "" && c.RepoScope != "all" {
+		errs = append(errs, fmt.Sprintf("repo_scope must be empty or 'all', got %q", c.RepoScope))
 	}
 
 	repoNames := make(map[string]bool)

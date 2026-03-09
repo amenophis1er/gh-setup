@@ -22,6 +22,21 @@ archives:
 checksum:
   name_template: checksums.txt
 
+brews:
+  - name: gh-setup
+    repository:
+      owner: amenophis1er
+      name: homebrew-tap
+    homepage: "https://github.com/amenophis1er/gh-setup"
+    description: "A CLI tool that declaratively configures GitHub accounts, repositories, branch protection, teams, labels, CI, and governance from a YAML config file."
+    license: "MIT"
+    dependencies:
+      - name: gh
+        type: optional
+    install: |
+      bin.install "gh-setup"
+      generate_completions_from_executable(bin/"gh-setup", "completion")
+
 changelog:
   sort: asc
   filters:

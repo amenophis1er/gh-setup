@@ -19,6 +19,13 @@ Installable as a standalone binary or as a [`gh` CLI](https://cli.github.com/) e
 
 ## Installation
 
+### Homebrew
+
+```bash
+brew tap amenophis1er/tap
+brew install gh-setup
+```
+
 ### As a `gh` CLI extension (recommended)
 
 ```bash
