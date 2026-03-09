@@ -1,0 +1,37 @@
+account:
+  type: individual
+  name: amenophis1er
+
+defaults:
+  visibility: public
+  default_branch: main
+  delete_branch_on_merge: true
+  branch_protection:
+    preset: standard
+
+labels:
+  replace_defaults: true
+  items:
+    - { name: "bug",         color: "d73a4a",  description: "Something isn't working" }
+    - { name: "enhancement", color: "a2eeef",  description: "New feature or request" }
+    - { name: "breaking",    color: "e11d48",  description: "Breaking change" }
+    - { name: "docs",        color: "0075ca",  description: "Documentation" }
+    - { name: "ci",          color: "e4e669",  description: "CI/CD changes" }
+    - { name: "chore",       color: "cfd3d7",  description: "Maintenance" }
+    - { name: "good first issue", color: "7057ff", description: "Good for newcomers" }
+
+repos:
+  - name: gh-setup
+    description: "Declaratively configure GitHub accounts, repos, and settings from a YAML file"
+    topics: ["github", "cli", "gh-extension", "devops", "automation", "golang"]
+    visibility: public
+
+governance:
+  contributing: false
+  code_of_conduct: false
+  security_policy: false
+
+security:
+  dependabot: true
+  secret_scanning: true
+  code_scanning: false
