@@ -49,12 +49,12 @@ func RunWith(client ghclient.GitHubClient, opts Options) (*config.Config, error)
 
 	// Import repos
 	if opts.RepoName != "" {
-		repo, err := importRepo(client, opts.Account, opts.RepoName)
+		repo, ghRepo, err := importRepo(client, opts.Account, opts.RepoName)
 		if err != nil {
 			return nil, fmt.Errorf("importing repo %s: %w", opts.RepoName, err)
 		}
 		cfg.Repos = []config.Repo{repo}
-		inferDefaults(cfg, client, opts.Account, opts.RepoName)
+		inferDefaults(cfg, client, opts.Account, ghRepo)
 	} else {
 		repos, err := client.ListRepos(opts.Account, isOrg)
 		if err != nil {
@@ -69,6 +69,7 @@ func RunWith(client ghclient.GitHubClient, opts Options) (*config.Config, error)
 		}
 
 		var mu sync.Mutex
+		var firstGHRepo *gh.Repository
 		g := new(errgroup.Group)
 		g.SetLimit(concurrency)
 
@@ -78,21 +79,24 @@ func RunWith(client ghclient.GitHubClient, opts Options) (*config.Config, error)
 			}
 			r := r
 			g.Go(func() error {
-				repo, err := importRepo(client, opts.Account, r.GetName())
+				repo, ghRepo, err := importRepo(client, opts.Account, r.GetName())
 				if err != nil {
 					log.Error("Failed to import repo", "repo", r.GetName(), "err", err)
 					return nil
 				}
 				mu.Lock()
 				cfg.Repos = append(cfg.Repos, repo)
+				if firstGHRepo == nil {
+					firstGHRepo = ghRepo
+				}
 				mu.Unlock()
 				return nil
 			})
 		}
 		_ = g.Wait()
 
-		if len(cfg.Repos) > 0 {
-			inferDefaults(cfg, client, opts.Account, cfg.Repos[0].Name)
+		if firstGHRepo != nil {
+			inferDefaults(cfg, client, opts.Account, firstGHRepo)
 		}
 	}
 
@@ -127,43 +131,41 @@ func RunWith(client ghclient.GitHubClient, opts Options) (*config.Config, error)
 	return cfg, nil
 }
 
-func importRepo(client ghclient.GitHubClient, owner, name string) (config.Repo, error) {
-	r, err := client.GetRepo(owner, name)
-	if err != nil {
-		return config.Repo{}, err
-	}
-	if r == nil {
-		return config.Repo{}, fmt.Errorf("repo %s not found", name)
-	}
-
+func repoFromGitHub(r *gh.Repository) config.Repo {
 	repo := config.Repo{
 		Name:        r.GetName(),
 		Description: r.GetDescription(),
 		Homepage:    r.GetHomepage(),
 	}
-
 	if r.GetPrivate() {
 		repo.Visibility = "private"
 	} else {
 		repo.Visibility = "public"
 	}
-
 	repo.Topics = r.Topics
+	return repo
+}
+
+func importRepo(client ghclient.GitHubClient, owner, name string) (config.Repo, *gh.Repository, error) {
+	r, err := client.GetRepo(owner, name)
+	if err != nil {
+		return config.Repo{}, nil, err
+	}
+	if r == nil {
+		return config.Repo{}, nil, fmt.Errorf("repo %s not found", name)
+	}
+
+	repo := repoFromGitHub(r)
 
 	content, _, err := client.GetFileContent(owner, name, ".github/workflows/ci.yml")
 	if err == nil && content != "" {
 		repo.CI = detectCITemplate(content)
 	}
 
-	return repo, nil
+	return repo, r, nil
 }
 
-func inferDefaults(cfg *config.Config, client ghclient.GitHubClient, owner, repoName string) {
-	repo, err := client.GetRepo(owner, repoName)
-	if err != nil || repo == nil {
-		return
-	}
-
+func inferDefaults(cfg *config.Config, client ghclient.GitHubClient, owner string, repo *gh.Repository) {
 	cfg.Defaults.DefaultBranch = repo.GetDefaultBranch()
 	cfg.Defaults.DeleteBranchOnMerge = repo.GetDeleteBranchOnMerge()
 	cfg.Defaults.AllowAutoMerge = repo.GetAllowAutoMerge()
@@ -185,14 +187,14 @@ func inferDefaults(cfg *config.Config, client ghclient.GitHubClient, owner, repo
 		branch = "main"
 	}
 
-	prot, err := client.GetBranchProtection(owner, repoName, branch)
+	prot, err := client.GetBranchProtection(owner, repo.GetName(), branch)
 	if err == nil && prot != nil {
 		cfg.Defaults.BranchProtection = detectProtectionPreset(prot)
 	} else {
 		cfg.Defaults.BranchProtection = config.BranchProtection{Preset: "none"}
 	}
 
-	dependabot, err := client.GetVulnerabilityAlerts(owner, repoName)
+	dependabot, err := client.GetVulnerabilityAlerts(owner, repo.GetName())
 	if err == nil {
 		cfg.Security.Dependabot = dependabot
 	}

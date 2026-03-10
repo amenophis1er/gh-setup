@@ -246,3 +246,34 @@ func ResolveProtection(preset string) BranchProtection {
 		return BranchProtection{Preset: preset}
 	}
 }
+
+// BoolPtrDiffers returns true when desired is explicitly set and differs from actual.
+func BoolPtrDiffers(actual bool, desired *bool) bool {
+	return desired != nil && actual != *desired
+}
+
+// MergeRepoScope merges discovered repo names with explicitly configured repos.
+// Configured repos override discovered ones by name; undiscovered config repos are appended.
+func MergeRepoScope(discoveredNames []string, configRepos []Repo) []Repo {
+	overrides := make(map[string]Repo, len(configRepos))
+	for _, r := range configRepos {
+		overrides[r.Name] = r
+	}
+
+	merged := make([]Repo, 0, len(discoveredNames)+len(configRepos))
+	seen := make(map[string]bool, len(discoveredNames))
+	for _, name := range discoveredNames {
+		seen[name] = true
+		if override, ok := overrides[name]; ok {
+			merged = append(merged, override)
+		} else {
+			merged = append(merged, Repo{Name: name})
+		}
+	}
+	for _, r := range configRepos {
+		if !seen[r.Name] {
+			merged = append(merged, r)
+		}
+	}
+	return merged
+}

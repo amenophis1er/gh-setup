@@ -37,6 +37,7 @@ func NewClient() (*Client, error) {
 	ctx := context.Background()
 	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
 	tc := oauth2.NewClient(ctx, ts)
+	tc.Transport = newRetryTransport(tc.Transport, 3)
 
 	// Support GitHub Enterprise via GH_HOST or GITHUB_API_URL
 	apiURL := os.Getenv("GITHUB_API_URL")

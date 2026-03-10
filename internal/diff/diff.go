@@ -59,29 +59,11 @@ func RunWith(client ghclient.GitHubClient, cfg *config.Config, outputFormat stri
 		if err != nil {
 			return fmt.Errorf("listing repos: %w", err)
 		}
-
-		overrides := make(map[string]config.Repo)
-		for _, r := range cfg.Repos {
-			overrides[r.Name] = r
+		names := make([]string, len(discovered))
+		for i, d := range discovered {
+			names[i] = d.GetName()
 		}
-
-		merged := make([]config.Repo, 0, len(discovered))
-		seen := make(map[string]bool)
-		for _, d := range discovered {
-			name := d.GetName()
-			seen[name] = true
-			if override, ok := overrides[name]; ok {
-				merged = append(merged, override)
-			} else {
-				merged = append(merged, config.Repo{Name: name})
-			}
-		}
-		for _, r := range cfg.Repos {
-			if !seen[r.Name] {
-				merged = append(merged, r)
-			}
-		}
-		repos = merged
+		repos = config.MergeRepoScope(names, cfg.Repos)
 	}
 
 	var result DiffResult
@@ -202,6 +184,14 @@ func diffRepo(client ghclient.GitHubClient, cfg *config.Config, owner string, re
 		result.Changes = append(result.Changes, Change{
 			Resource: resource, Type: resType, Field: "description", Action: "change",
 			Old: fmt.Sprintf("%q", existing.GetDescription()), New: fmt.Sprintf("%q", repo.Description),
+		})
+	}
+
+	if repo.Homepage != "" && existing.GetHomepage() != repo.Homepage {
+		changes = true
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: resType, Field: "homepage", Action: "change",
+			Old: fmt.Sprintf("%q", existing.GetHomepage()), New: fmt.Sprintf("%q", repo.Homepage),
 		})
 	}
 
@@ -396,7 +386,7 @@ func boolToVisibility(private bool) string {
 
 // diffBoolPtr adds a change only when desired is explicitly set (non-nil) and differs from actual.
 func diffBoolPtr(actual bool, desired *bool, field, resource, resType string, result *DiffResult, changes *bool) {
-	if desired != nil && actual != *desired {
+	if config.BoolPtrDiffers(actual, desired) {
 		*changes = true
 		result.Changes = append(result.Changes, Change{
 			Resource: resource, Type: resType, Field: field, Action: "change",
