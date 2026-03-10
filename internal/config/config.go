@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -13,86 +14,86 @@ var validNameRe = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
 // Config is the top-level gh-setup configuration.
 type Config struct {
-	Account    Account    `yaml:"account"`
-	Defaults   Defaults   `yaml:"defaults"`
-	Labels     Labels     `yaml:"labels"`
-	RepoScope  string     `yaml:"repo_scope,omitempty"`
-	Repos      []Repo     `yaml:"repos"`
-	Teams      []Team     `yaml:"teams,omitempty"`
-	Governance Governance `yaml:"governance"`
-	Security   Security   `yaml:"security"`
-	Secrets    []Secret   `yaml:"secrets,omitempty"`
+	Account    Account    `yaml:"account" json:"account"`
+	Defaults   Defaults   `yaml:"defaults" json:"defaults"`
+	Labels     Labels     `yaml:"labels" json:"labels"`
+	RepoScope  string     `yaml:"repo_scope,omitempty" json:"repo_scope,omitempty"`
+	Repos      []Repo     `yaml:"repos" json:"repos"`
+	Teams      []Team     `yaml:"teams,omitempty" json:"teams,omitempty"`
+	Governance Governance `yaml:"governance" json:"governance"`
+	Security   Security   `yaml:"security" json:"security"`
+	Secrets    []Secret   `yaml:"secrets,omitempty" json:"secrets,omitempty"`
 }
 
 type Account struct {
-	Type string `yaml:"type"` // individual | organization
-	Name string `yaml:"name"`
+	Type string `yaml:"type" json:"type"` // individual | organization
+	Name string `yaml:"name" json:"name"`
 }
 
 type Defaults struct {
-	Visibility          string           `yaml:"visibility"`
-	DefaultBranch       string           `yaml:"default_branch"`
-	DeleteBranchOnMerge bool             `yaml:"delete_branch_on_merge"`
-	BranchProtection    BranchProtection `yaml:"branch_protection"`
+	Visibility          string           `yaml:"visibility" json:"visibility"`
+	DefaultBranch       string           `yaml:"default_branch" json:"default_branch"`
+	DeleteBranchOnMerge bool             `yaml:"delete_branch_on_merge" json:"delete_branch_on_merge"`
+	BranchProtection    BranchProtection `yaml:"branch_protection" json:"branch_protection"`
 }
 
 type BranchProtection struct {
-	Preset              string   `yaml:"preset"` // none | basic | standard | strict | custom
-	RequirePR           bool     `yaml:"require_pr,omitempty"`
-	RequiredApprovals   int      `yaml:"required_approvals,omitempty"`
-	DismissStaleReviews bool     `yaml:"dismiss_stale_reviews,omitempty"`
-	RequireStatusChecks bool     `yaml:"require_status_checks,omitempty"`
-	StatusChecks        []string `yaml:"status_checks,omitempty"`
-	RequireUpToDate     bool     `yaml:"require_up_to_date,omitempty"`
-	EnforceAdmins       bool     `yaml:"enforce_admins,omitempty"`
-	AllowForcePush      bool     `yaml:"allow_force_push,omitempty"`
-	AllowDeletions      bool     `yaml:"allow_deletions,omitempty"`
+	Preset              string   `yaml:"preset" json:"preset"` // none | basic | standard | strict | custom
+	RequirePR           bool     `yaml:"require_pr,omitempty" json:"require_pr,omitempty"`
+	RequiredApprovals   int      `yaml:"required_approvals,omitempty" json:"required_approvals,omitempty"`
+	DismissStaleReviews bool     `yaml:"dismiss_stale_reviews,omitempty" json:"dismiss_stale_reviews,omitempty"`
+	RequireStatusChecks bool     `yaml:"require_status_checks,omitempty" json:"require_status_checks,omitempty"`
+	StatusChecks        []string `yaml:"status_checks,omitempty" json:"status_checks,omitempty"`
+	RequireUpToDate     bool     `yaml:"require_up_to_date,omitempty" json:"require_up_to_date,omitempty"`
+	EnforceAdmins       bool     `yaml:"enforce_admins,omitempty" json:"enforce_admins,omitempty"`
+	AllowForcePush      bool     `yaml:"allow_force_push,omitempty" json:"allow_force_push,omitempty"`
+	AllowDeletions      bool     `yaml:"allow_deletions,omitempty" json:"allow_deletions,omitempty"`
 }
 
 type Labels struct {
-	ReplaceDefaults bool    `yaml:"replace_defaults"`
-	Items           []Label `yaml:"items"`
+	ReplaceDefaults bool    `yaml:"replace_defaults" json:"replace_defaults"`
+	Items           []Label `yaml:"items" json:"items"`
 }
 
 type Label struct {
-	Name        string `yaml:"name"`
-	Color       string `yaml:"color"`
-	Description string `yaml:"description"`
+	Name        string `yaml:"name" json:"name"`
+	Color       string `yaml:"color" json:"color"`
+	Description string `yaml:"description" json:"description"`
 }
 
 type Repo struct {
-	Name            string            `yaml:"name"`
-	Description     string            `yaml:"description,omitempty"`
-	Topics          []string          `yaml:"topics,omitempty"`
-	Visibility      string            `yaml:"visibility,omitempty"`
-	Homepage        string            `yaml:"homepage,omitempty"`
-	CI              string            `yaml:"ci,omitempty"`
-	ExtraProtection *BranchProtection `yaml:"extra_protection,omitempty"`
+	Name            string            `yaml:"name" json:"name"`
+	Description     string            `yaml:"description,omitempty" json:"description,omitempty"`
+	Topics          []string          `yaml:"topics,omitempty" json:"topics,omitempty"`
+	Visibility      string            `yaml:"visibility,omitempty" json:"visibility,omitempty"`
+	Homepage        string            `yaml:"homepage,omitempty" json:"homepage,omitempty"`
+	CI              string            `yaml:"ci,omitempty" json:"ci,omitempty"`
+	ExtraProtection *BranchProtection `yaml:"extra_protection,omitempty" json:"extra_protection,omitempty"`
 }
 
 type Team struct {
-	Name        string   `yaml:"name"`
-	Description string   `yaml:"description,omitempty"`
-	Permission  string   `yaml:"permission"` // read | write | admin
-	Members     []string `yaml:"members"`
+	Name        string   `yaml:"name" json:"name"`
+	Description string   `yaml:"description,omitempty" json:"description,omitempty"`
+	Permission  string   `yaml:"permission" json:"permission"` // read | write | admin
+	Members     []string `yaml:"members" json:"members"`
 }
 
 type Governance struct {
-	Contributing   bool   `yaml:"contributing"`
-	CodeOfConduct  bool   `yaml:"code_of_conduct"`
-	SecurityPolicy bool   `yaml:"security_policy"`
-	Codeowners     string `yaml:"codeowners,omitempty"`
+	Contributing   bool   `yaml:"contributing" json:"contributing"`
+	CodeOfConduct  bool   `yaml:"code_of_conduct" json:"code_of_conduct"`
+	SecurityPolicy bool   `yaml:"security_policy" json:"security_policy"`
+	Codeowners     string `yaml:"codeowners,omitempty" json:"codeowners,omitempty"`
 }
 
 type Security struct {
-	Dependabot    bool `yaml:"dependabot"`
-	SecretScanning bool `yaml:"secret_scanning"`
-	CodeScanning  bool `yaml:"code_scanning"`
+	Dependabot     bool `yaml:"dependabot" json:"dependabot"`
+	SecretScanning bool `yaml:"secret_scanning" json:"secret_scanning"`
+	CodeScanning   bool `yaml:"code_scanning" json:"code_scanning"`
 }
 
 type Secret struct {
-	Name  string `yaml:"name"`
-	Scope string `yaml:"scope"` // org | repo
+	Name  string `yaml:"name" json:"name"`
+	Scope string `yaml:"scope" json:"scope"` // org | repo
 }
 
 // Load reads and parses a gh-setup.yaml file.
@@ -106,6 +107,16 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	return &cfg, nil
+}
+
+// Marshal serializes the config to the given format ("yaml" or "json").
+func Marshal(cfg *Config, format string) ([]byte, error) {
+	switch format {
+	case "json":
+		return json.MarshalIndent(cfg, "", "  ")
+	default:
+		return yaml.Marshal(cfg)
+	}
 }
 
 // Save writes the config to a YAML file.

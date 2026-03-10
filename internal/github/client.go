@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 
 	gh "github.com/google/go-github/v68/github"
 	"golang.org/x/oauth2"
@@ -23,7 +25,13 @@ func NewClient() (*Client, error) {
 		token = os.Getenv("GH_TOKEN")
 	}
 	if token == "" {
-		return nil, fmt.Errorf("GITHUB_TOKEN or GH_TOKEN environment variable must be set")
+		// Fall back to gh CLI auth token (available when running as a gh extension)
+		if out, err := exec.Command("gh", "auth", "token").Output(); err == nil {
+			token = strings.TrimSpace(string(out))
+		}
+	}
+	if token == "" {
+		return nil, fmt.Errorf("GITHUB_TOKEN or GH_TOKEN environment variable must be set, or authenticate via: gh auth login")
 	}
 
 	ctx := context.Background()
