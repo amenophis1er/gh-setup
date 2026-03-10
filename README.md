@@ -70,15 +70,21 @@ gh setup apply
 
 ## Authentication
 
-`gh-setup` reads your GitHub token from environment variables:
+`gh-setup` resolves your GitHub token in this order:
+
+1. `GITHUB_TOKEN` environment variable
+2. `GH_TOKEN` environment variable
+3. `gh auth token` (automatic when running as a `gh` extension)
+
+If you're authenticated via `gh auth login`, no extra setup is needed. For CI or explicit control:
 
 ```bash
 export GITHUB_TOKEN="ghp_..."
-# or
-export GH_TOKEN="ghp_..."
 ```
 
-If you use the `gh` CLI, you likely already have `GH_TOKEN` set. The token needs the following scopes:
+**GitHub Enterprise:** set `GITHUB_API_URL` or `GH_HOST` to target a GHE instance.
+
+The token needs the following scopes:
 
 | Scope | Required for |
 |-------|-------------|
@@ -191,6 +197,8 @@ labels:
     - { name: "ci",          color: "e4e669",  description: "CI/CD changes" }
     - { name: "chore",       color: "cfd3d7",  description: "Maintenance" }
 
+repo_scope: all                 # omit to manage only listed repos (see Repo Scope below)
+
 repos:
   - name: my-api
     description: "REST API service"
@@ -233,6 +241,40 @@ secrets:                       # names only — values prompted at apply time
   - name: NPM_TOKEN
     scope: repo                # set on every repo listed in repos:
 ```
+
+## Repo Scope
+
+By default, gh-setup only manages repos explicitly listed in `repos:`. Set `repo_scope: all` to manage **every** repo in the account:
+
+```yaml
+repo_scope: all
+
+defaults:
+  visibility: private
+  branch_protection:
+    preset: standard
+
+repos:
+  # Only repos that need overrides — all others get the defaults above
+  - name: public-docs
+    visibility: public
+    extra_protection:
+      preset: none
+```
+
+**How it works:**
+
+1. All repos are discovered from the GitHub account via API
+2. `defaults` (labels, branch protection, security, etc.) are applied to every discovered repo
+3. Repos listed in `repos:` override those defaults for that specific repo
+4. Repos in `repos:` that don't exist yet are created
+
+**Caveats:**
+
+- Without `repo_scope: all`, unlisted repos are completely untouched
+- With `repo_scope: all`, be cautious — defaults apply to every repo, including ones you may not want to change
+- Start with `gh setup diff` to preview what would change before running `gh setup apply`
+- Consider using `gh setup import myorg --stdout` first to see the current state of all repos
 
 ## Branch Protection Presets
 
