@@ -35,13 +35,17 @@ type DiffResult struct {
 	Changes []Change `json:"changes"`
 }
 
-// Run compares the config against actual GitHub state and prints differences.
+// Run compares the config against actual GitHub state using a new authenticated client.
 func Run(cfg *config.Config, outputFormat string, concurrency int) error {
 	client, err := ghclient.NewClient()
 	if err != nil {
 		return err
 	}
+	return RunWith(client, cfg, outputFormat, concurrency)
+}
 
+// RunWith compares the config against actual GitHub state using the provided client.
+func RunWith(client ghclient.GitHubClient, cfg *config.Config, outputFormat string, concurrency int) error {
 	if concurrency < 1 {
 		concurrency = 1
 	}
@@ -160,7 +164,7 @@ func printTextOutput(result DiffResult, owner string, cfg *config.Config) {
 	}
 }
 
-func diffRepo(client *ghclient.Client, cfg *config.Config, owner string, repo config.Repo, result *DiffResult) {
+func diffRepo(client ghclient.GitHubClient, cfg *config.Config, owner string, repo config.Repo, result *DiffResult) {
 	resource := fmt.Sprintf("%s/%s", owner, repo.Name)
 	resType := "repo"
 
@@ -226,7 +230,7 @@ func diffRepo(client *ghclient.Client, cfg *config.Config, owner string, repo co
 	}
 }
 
-func diffLabels(client *ghclient.Client, owner, repo string, labels config.Labels, resource string, result *DiffResult) {
+func diffLabels(client ghclient.GitHubClient, owner, repo string, labels config.Labels, resource string, result *DiffResult) {
 	existing, err := client.ListLabels(owner, repo)
 	if err != nil {
 		result.Changes = append(result.Changes, Change{
@@ -268,7 +272,7 @@ func diffLabels(client *ghclient.Client, owner, repo string, labels config.Label
 	}
 }
 
-func diffProtection(client *ghclient.Client, cfg *config.Config, owner string, repo config.Repo, branch string, resource string, result *DiffResult) {
+func diffProtection(client ghclient.GitHubClient, cfg *config.Config, owner string, repo config.Repo, branch string, resource string, result *DiffResult) {
 	bp := config.ResolveProtection(cfg.Defaults.BranchProtection.Preset)
 	if cfg.Defaults.BranchProtection.Preset == "custom" {
 		bp = cfg.Defaults.BranchProtection
@@ -314,7 +318,7 @@ func diffProtection(client *ghclient.Client, cfg *config.Config, owner string, r
 	}
 }
 
-func diffTeam(client *ghclient.Client, org string, team config.Team, result *DiffResult) {
+func diffTeam(client ghclient.GitHubClient, org string, team config.Team, result *DiffResult) {
 	resource := team.Name
 	resType := "team"
 

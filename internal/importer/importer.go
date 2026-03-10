@@ -19,13 +19,17 @@ type Options struct {
 	Concurrency int
 }
 
-// Run imports the current GitHub state into a Config.
+// Run imports the current GitHub state into a Config using a new authenticated client.
 func Run(opts Options) (*config.Config, error) {
 	client, err := ghclient.NewClient()
 	if err != nil {
 		return nil, err
 	}
+	return RunWith(client, opts)
+}
 
+// RunWith imports the current GitHub state into a Config using the provided client.
+func RunWith(client ghclient.GitHubClient, opts Options) (*config.Config, error) {
 	isOrg, err := client.IsOrganization(opts.Account)
 	if err != nil {
 		return nil, fmt.Errorf("checking account type: %w", err)
@@ -123,7 +127,7 @@ func Run(opts Options) (*config.Config, error) {
 	return cfg, nil
 }
 
-func importRepo(client *ghclient.Client, owner, name string) (config.Repo, error) {
+func importRepo(client ghclient.GitHubClient, owner, name string) (config.Repo, error) {
 	r, err := client.GetRepo(owner, name)
 	if err != nil {
 		return config.Repo{}, err
@@ -154,7 +158,7 @@ func importRepo(client *ghclient.Client, owner, name string) (config.Repo, error
 	return repo, nil
 }
 
-func inferDefaults(cfg *config.Config, client *ghclient.Client, owner, repoName string) {
+func inferDefaults(cfg *config.Config, client ghclient.GitHubClient, owner, repoName string) {
 	repo, err := client.GetRepo(owner, repoName)
 	if err != nil || repo == nil {
 		return
@@ -244,7 +248,7 @@ func detectProtectionPreset(prot *gh.Protection) config.BranchProtection {
 	return bp
 }
 
-func importLabels(client *ghclient.Client, owner, repo string) ([]config.Label, error) {
+func importLabels(client ghclient.GitHubClient, owner, repo string) ([]config.Label, error) {
 	ghLabels, err := client.ListLabels(owner, repo)
 	if err != nil {
 		return nil, err
@@ -261,7 +265,7 @@ func importLabels(client *ghclient.Client, owner, repo string) ([]config.Label, 
 	return labels, nil
 }
 
-func importTeams(client *ghclient.Client, org string) ([]config.Team, error) {
+func importTeams(client ghclient.GitHubClient, org string) ([]config.Team, error) {
 	ghTeams, err := client.ListOrgTeams(org)
 	if err != nil {
 		return nil, err
@@ -298,7 +302,7 @@ func importTeams(client *ghclient.Client, org string) ([]config.Team, error) {
 	return teams, nil
 }
 
-func importGovernance(client *ghclient.Client, owner, repo string) config.Governance {
+func importGovernance(client ghclient.GitHubClient, owner, repo string) config.Governance {
 	gov := config.Governance{}
 
 	if content, _, err := client.GetFileContent(owner, repo, "CONTRIBUTING.md"); err == nil && content != "" {

@@ -14,6 +14,15 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// Run applies the config to GitHub using a new authenticated client.
+func Run(cfg *config.Config, opts Options) error {
+	client, err := ghclient.NewClient()
+	if err != nil {
+		return err
+	}
+	return RunWith(client, cfg, opts)
+}
+
 // Options configures the apply behavior.
 type Options struct {
 	DryRun         bool
@@ -22,13 +31,8 @@ type Options struct {
 	Concurrency    int
 }
 
-// Run applies the config to GitHub.
-func Run(cfg *config.Config, opts Options) error {
-	client, err := ghclient.NewClient()
-	if err != nil {
-		return err
-	}
-
+// RunWith applies the config to GitHub using the provided client.
+func RunWith(client ghclient.GitHubClient, cfg *config.Config, opts Options) error {
 	owner := cfg.Account.Name
 	isOrg := cfg.Account.Type == "organization"
 
@@ -114,7 +118,7 @@ func Run(cfg *config.Config, opts Options) error {
 	return nil
 }
 
-func applyRepo(client *ghclient.Client, cfg *config.Config, owner string, isOrg bool, repo config.Repo, opts Options) error {
+func applyRepo(client ghclient.GitHubClient, cfg *config.Config, owner string, isOrg bool, repo config.Repo, opts Options) error {
 	visibility := repo.Visibility
 	if visibility == "" {
 		visibility = cfg.Defaults.Visibility
@@ -256,7 +260,7 @@ func applyRepo(client *ghclient.Client, cfg *config.Config, owner string, isOrg 
 	return nil
 }
 
-func applyLabels(client *ghclient.Client, owner, repo string, labels config.Labels, opts Options) error {
+func applyLabels(client ghclient.GitHubClient, owner, repo string, labels config.Labels, opts Options) error {
 	if len(labels.Items) == 0 {
 		return nil
 	}
@@ -322,7 +326,7 @@ func applyLabels(client *ghclient.Client, owner, repo string, labels config.Labe
 	return nil
 }
 
-func applyCIWorkflow(client *ghclient.Client, owner, repo, ciName string, opts Options) error {
+func applyCIWorkflow(client ghclient.GitHubClient, owner, repo, ciName string, opts Options) error {
 	content, err := templates.CIWorkflow(ciName)
 	if err != nil {
 		return fmt.Errorf("loading CI template %s: %w", ciName, err)
@@ -346,7 +350,7 @@ func applyCIWorkflow(client *ghclient.Client, owner, repo, ciName string, opts O
 	return nil
 }
 
-func applyDependabot(client *ghclient.Client, owner, repo, ci string, opts Options) error {
+func applyDependabot(client ghclient.GitHubClient, owner, repo, ci string, opts Options) error {
 	ecosystem := templates.CIToEcosystem(ci)
 	content := templates.DependabotConfig(ecosystem)
 	path := ".github/dependabot.yml"
@@ -373,7 +377,7 @@ func applyDependabot(client *ghclient.Client, owner, repo, ci string, opts Optio
 	return nil
 }
 
-func applyGovernance(client *ghclient.Client, owner, repo string, gov config.Governance, opts Options) error {
+func applyGovernance(client ghclient.GitHubClient, owner, repo string, gov config.Governance, opts Options) error {
 	files := map[string]func() string{}
 
 	if gov.Contributing {
@@ -411,7 +415,7 @@ func applyGovernance(client *ghclient.Client, owner, repo string, gov config.Gov
 	return nil
 }
 
-func applySecurity(client *ghclient.Client, owner, repo string, sec config.Security, opts Options) error {
+func applySecurity(client ghclient.GitHubClient, owner, repo string, sec config.Security, opts Options) error {
 	if opts.DryRun {
 		logDryRun("apply security settings", repo)
 		return nil
@@ -434,7 +438,7 @@ func applySecurity(client *ghclient.Client, owner, repo string, sec config.Secur
 	return nil
 }
 
-func applyTeam(client *ghclient.Client, org string, team config.Team, opts Options) error {
+func applyTeam(client ghclient.GitHubClient, org string, team config.Team, opts Options) error {
 	existing, err := client.GetTeam(org, team.Name)
 	if err != nil {
 		return fmt.Errorf("fetching team %s: %w", team.Name, err)
@@ -508,7 +512,7 @@ func applyTeam(client *ghclient.Client, org string, team config.Team, opts Optio
 	return nil
 }
 
-func applySecret(client *ghclient.Client, owner, repo string, isOrg bool, secret config.Secret, opts Options) error {
+func applySecret(client ghclient.GitHubClient, owner, repo string, isOrg bool, secret config.Secret, opts Options) error {
 	if opts.DryRun {
 		logDryRun("set secret", secret.Name+" ("+secret.Scope+")")
 		return nil
