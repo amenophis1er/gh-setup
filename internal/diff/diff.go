@@ -3,6 +3,8 @@ package diff
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"sync"
 
@@ -46,6 +48,20 @@ func Run(cfg *config.Config, outputFormat string, concurrency int) error {
 
 // RunWith compares the config against actual GitHub state using the provided client.
 func RunWith(client ghclient.GitHubClient, cfg *config.Config, outputFormat string, concurrency int) error {
+	result, err := Compute(client, cfg, concurrency)
+	if err != nil {
+		return err
+	}
+
+	if outputFormat == "json" {
+		return RenderJSON(os.Stdout, result)
+	}
+	RenderText(os.Stdout, result)
+	return nil
+}
+
+// Compute calculates the diff between config and live GitHub state.
+func Compute(client ghclient.GitHubClient, cfg *config.Config, concurrency int) (DiffResult, error) {
 	if concurrency < 1 {
 		concurrency = 1
 	}
@@ -57,7 +73,7 @@ func RunWith(client ghclient.GitHubClient, cfg *config.Config, outputFormat stri
 	if cfg.RepoScope == "all" {
 		discovered, err := client.ListRepos(owner, isOrg)
 		if err != nil {
-			return fmt.Errorf("listing repos: %w", err)
+			return DiffResult{}, fmt.Errorf("listing repos: %w", err)
 		}
 		names := make([]string, len(discovered))
 		for i, d := range discovered {
@@ -91,57 +107,50 @@ func RunWith(client ghclient.GitHubClient, cfg *config.Config, outputFormat stri
 		}
 	}
 
-	if outputFormat == "json" {
-		data, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			return fmt.Errorf("marshalling JSON: %w", err)
-		}
-		fmt.Println(string(data))
-	} else {
-		printTextOutput(result, owner, cfg)
-	}
-
-	return nil
+	return result, nil
 }
 
-func printTextOutput(result DiffResult, owner string, cfg *config.Config) {
-	// Group changes by resource for display
-	currentResource := ""
-	resourceHasChanges := make(map[string]bool)
-
-	// Pre-scan to determine which resources have real changes (not just "ok")
-	for _, c := range result.Changes {
-		if c.Action != "ok" {
-			resourceHasChanges[c.Resource] = true
-		}
+// RenderJSON writes the diff result as indented JSON.
+func RenderJSON(w io.Writer, result DiffResult) error {
+	data, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshalling JSON: %w", err)
 	}
+	data = append(data, '\n')
+	_, err = w.Write(data)
+	return err
+}
+
+// RenderText writes the diff result as styled text.
+func RenderText(w io.Writer, result DiffResult) {
+	currentResource := ""
 
 	for _, c := range result.Changes {
 		if c.Resource != currentResource {
 			currentResource = c.Resource
-			fmt.Println()
-			fmt.Println(headerStyle.Render(fmt.Sprintf("  %s %s", c.Type, c.Resource)))
+			fmt.Fprintln(w)
+			fmt.Fprintln(w, headerStyle.Render(fmt.Sprintf("  %s %s", c.Type, c.Resource)))
 		}
 
 		switch c.Action {
 		case "add":
 			if c.Field != "" {
-				fmt.Println(addStyle.Render(fmt.Sprintf("    %s: + %s", c.Field, c.New)))
+				fmt.Fprintln(w, addStyle.Render(fmt.Sprintf("    %s: + %s", c.Field, c.New)))
 			} else {
-				fmt.Println(addStyle.Render(fmt.Sprintf("    + %s", c.New)))
+				fmt.Fprintln(w, addStyle.Render(fmt.Sprintf("    + %s", c.New)))
 			}
 		case "remove":
 			if c.Field != "" {
-				fmt.Println(removeStyle.Render(fmt.Sprintf("    %s: - %s", c.Field, c.Old)))
+				fmt.Fprintln(w, removeStyle.Render(fmt.Sprintf("    %s: - %s", c.Field, c.Old)))
 			} else {
-				fmt.Println(removeStyle.Render(fmt.Sprintf("    - %s", c.Old)))
+				fmt.Fprintln(w, removeStyle.Render(fmt.Sprintf("    - %s", c.Old)))
 			}
 		case "change":
-			fmt.Println(changeStyle.Render(fmt.Sprintf("    %s:  %s → %s", c.Field, c.Old, c.New)))
+			fmt.Fprintln(w, changeStyle.Render(fmt.Sprintf("    %s:  %s → %s", c.Field, c.Old, c.New)))
 		case "ok":
-			fmt.Println(okStyle.Render(fmt.Sprintf("    %s", c.New)))
+			fmt.Fprintln(w, okStyle.Render(fmt.Sprintf("    %s", c.New)))
 		case "error":
-			fmt.Printf("    %s: %s\n", c.Field, c.New)
+			fmt.Fprintf(w, "    %s: %s\n", c.Field, c.New)
 		}
 	}
 }
@@ -220,6 +229,7 @@ func diffRepo(client ghclient.GitHubClient, cfg *config.Config, owner string, re
 	diffBoolPtr(existing.GetHasDiscussions(), cfg.Defaults.HasDiscussions, "has_discussions", resource, resType, result, &changes)
 
 	// Labels diff
+	changesBefore := len(result.Changes)
 	diffLabels(client, owner, repo.Name, cfg.Labels, resource, result)
 
 	// Branch protection diff
@@ -229,7 +239,7 @@ func diffRepo(client ghclient.GitHubClient, cfg *config.Config, owner string, re
 	}
 	diffProtection(client, cfg, owner, repo, branch, resource, result)
 
-	if !changes {
+	if !changes && len(result.Changes) == changesBefore {
 		result.Changes = append(result.Changes, Change{
 			Resource: resource, Type: resType, Action: "ok", New: "\u2713 up to date",
 		})

@@ -1,0 +1,9 @@
+
+[1;94m  repo testuser/existing-repo[0m
+[93m    visibility:  private → public[0m
+[93m    description:  "Old description" → "New description"[0m
+[92m    labels: + bug (d73a4a)[0m
+[91m    labels: - wontfix (ffffff)[0m
+
+[1;94m  repo testuser/new-repo[0m
+[92m    + repo does not exist (will be created)[0m

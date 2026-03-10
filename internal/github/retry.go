@@ -65,6 +65,11 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return resp, nil
 		}
 
+		// Last attempt — return whatever we got.
+		if attempt >= t.maxRetries {
+			return resp, nil
+		}
+
 		wait := retryDelay(resp, attempt)
 		log.Debug("Retrying request", "status", resp.StatusCode, "attempt", attempt+1, "wait", wait)
 
@@ -72,9 +77,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 
-		if attempt < t.maxRetries {
-			time.Sleep(wait)
-		}
+		time.Sleep(wait)
 	}
 
 	return resp, err

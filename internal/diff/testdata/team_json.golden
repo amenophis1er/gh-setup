@@ -1,0 +1,18 @@
+{
+  "changes": [
+    {
+      "resource": "core",
+      "type": "team",
+      "field": "member",
+      "new": "bob",
+      "action": "add"
+    },
+    {
+      "resource": "core",
+      "type": "team",
+      "field": "member",
+      "old": "charlie",
+      "action": "remove"
+    }
+  ]
+}

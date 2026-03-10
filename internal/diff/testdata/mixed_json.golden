@@ -1,0 +1,41 @@
+{
+  "changes": [
+    {
+      "resource": "testuser/existing-repo",
+      "type": "repo",
+      "field": "visibility",
+      "old": "private",
+      "new": "public",
+      "action": "change"
+    },
+    {
+      "resource": "testuser/existing-repo",
+      "type": "repo",
+      "field": "description",
+      "old": "\"Old description\"",
+      "new": "\"New description\"",
+      "action": "change"
+    },
+    {
+      "resource": "testuser/existing-repo",
+      "type": "label",
+      "field": "labels",
+      "new": "bug (d73a4a)",
+      "action": "add"
+    },
+    {
+      "resource": "testuser/existing-repo",
+      "type": "label",
+      "field": "labels",
+      "old": "wontfix (ffffff)",
+      "action": "remove"
+    },
+    {
+      "resource": "testuser/new-repo",
+      "type": "repo",
+      "field": "",
+      "new": "repo does not exist (will be created)",
+      "action": "add"
+    }
+  ]
+}

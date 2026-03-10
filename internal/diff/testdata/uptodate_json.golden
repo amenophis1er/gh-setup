@@ -1,0 +1,11 @@
+{
+  "changes": [
+    {
+      "resource": "testuser/my-repo",
+      "type": "repo",
+      "field": "",
+      "new": "✓ up to date",
+      "action": "ok"
+    }
+  ]
+}
