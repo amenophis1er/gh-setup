@@ -3,17 +3,20 @@ package importer
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/amenophis1er/gh-setup/internal/config"
 	ghclient "github.com/amenophis1er/gh-setup/internal/github"
 	"github.com/charmbracelet/log"
 	gh "github.com/google/go-github/v68/github"
+	"golang.org/x/sync/errgroup"
 )
 
 // Options configures the import behavior.
 type Options struct {
-	Account  string
-	RepoName string // if set, import only this repo
+	Account     string
+	RepoName    string // if set, import only this repo
+	Concurrency int
 }
 
 // Run imports the current GitHub state into a Config.
@@ -56,17 +59,33 @@ func Run(opts Options) (*config.Config, error) {
 
 		log.Info("Discovered repos", "count", len(repos))
 
+		concurrency := opts.Concurrency
+		if concurrency < 1 {
+			concurrency = 4
+		}
+
+		var mu sync.Mutex
+		g := new(errgroup.Group)
+		g.SetLimit(concurrency)
+
 		for _, r := range repos {
 			if r.GetArchived() || r.GetFork() {
 				continue
 			}
-			repo, err := importRepo(client, opts.Account, r.GetName())
-			if err != nil {
-				log.Error("Failed to import repo", "repo", r.GetName(), "err", err)
-				continue
-			}
-			cfg.Repos = append(cfg.Repos, repo)
+			r := r
+			g.Go(func() error {
+				repo, err := importRepo(client, opts.Account, r.GetName())
+				if err != nil {
+					log.Error("Failed to import repo", "repo", r.GetName(), "err", err)
+					return nil
+				}
+				mu.Lock()
+				cfg.Repos = append(cfg.Repos, repo)
+				mu.Unlock()
+				return nil
+			})
 		}
+		_ = g.Wait()
 
 		if len(cfg.Repos) > 0 {
 			inferDefaults(cfg, client, opts.Account, cfg.Repos[0].Name)

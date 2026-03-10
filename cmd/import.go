@@ -11,9 +11,10 @@ import (
 )
 
 var (
-	importRepoFlag   string
-	importOutput     string
-	importStdout     bool
+	importRepoFlag    string
+	importOutput      string
+	importStdout      bool
+	importConcurrency int
 )
 
 var importCmd = &cobra.Command{
@@ -35,8 +36,9 @@ Use --stdout to print to standard output instead, and --output to choose the for
 		}
 
 		opts := importer.Options{
-			Account:  args[0],
-			RepoName: importRepoFlag,
+			Account:     args[0],
+			RepoName:    importRepoFlag,
+			Concurrency: importConcurrency,
 		}
 
 		cfg, err := importer.Run(opts)
@@ -68,5 +70,6 @@ func init() {
 	importCmd.Flags().StringVar(&importRepoFlag, "repo", "", "import only a specific repo")
 	importCmd.Flags().StringVarP(&importOutput, "output", "o", "yaml", "output format (yaml or json)")
 	importCmd.Flags().BoolVar(&importStdout, "stdout", false, "print to stdout instead of writing a file")
+	importCmd.Flags().IntVar(&importConcurrency, "concurrency", 4, "number of repos to process in parallel")
 	rootCmd.AddCommand(importCmd)
 }

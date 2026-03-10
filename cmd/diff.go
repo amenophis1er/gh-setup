@@ -9,7 +9,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var diffOutputFormat string
+var (
+	diffOutputFormat string
+	diffConcurrency  int
+)
 
 var diffCmd = &cobra.Command{
 	Use:   "diff",
@@ -28,7 +31,7 @@ var diffCmd = &cobra.Command{
 			return err
 		}
 
-		if err := diff.Run(cfg, diffOutputFormat); err != nil {
+		if err := diff.Run(cfg, diffOutputFormat, diffConcurrency); err != nil {
 			return err
 		}
 
@@ -41,5 +44,6 @@ var diffCmd = &cobra.Command{
 
 func init() {
 	diffCmd.Flags().StringVarP(&diffOutputFormat, "output", "o", "text", "output format (text or json)")
+	diffCmd.Flags().IntVar(&diffConcurrency, "concurrency", 4, "number of repos to process in parallel")
 	rootCmd.AddCommand(diffCmd)
 }

@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/amenophis1er/gh-setup/internal/config"
 	ghclient "github.com/amenophis1er/gh-setup/internal/github"
 	"github.com/amenophis1er/gh-setup/internal/templates"
 	"github.com/charmbracelet/huh"
 	gh "github.com/google/go-github/v68/github"
+	"golang.org/x/sync/errgroup"
 )
 
 // Options configures the apply behavior.
@@ -17,6 +19,7 @@ type Options struct {
 	DryRun         bool
 	Interactive    bool
 	NonInteractive bool
+	Concurrency    int
 }
 
 // Run applies the config to GitHub.
@@ -30,6 +33,16 @@ func Run(cfg *config.Config, opts Options) error {
 	isOrg := cfg.Account.Type == "organization"
 
 	var errs []string
+	var mu sync.Mutex
+
+	concurrency := opts.Concurrency
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	// Interactive mode requires sequential execution for prompts
+	if opts.Interactive {
+		concurrency = 1
+	}
 
 	repos := cfg.Repos
 	if cfg.RepoScope == "all" {
@@ -64,13 +77,22 @@ func Run(cfg *config.Config, opts Options) error {
 
 	// Apply repos
 	logHeader("Repositories")
+	g := new(errgroup.Group)
+	g.SetLimit(concurrency)
+
 	for _, repo := range repos {
-		if err := applyRepo(client, cfg, owner, isOrg, repo, opts); err != nil {
-			logError("apply", repo.Name, err)
-			errs = append(errs, fmt.Sprintf("repo %s: %s", repo.Name, err))
-			continue
-		}
+		repo := repo
+		g.Go(func() error {
+			if err := applyRepo(client, cfg, owner, isOrg, repo, opts); err != nil {
+				logError("apply", repo.Name, err)
+				mu.Lock()
+				errs = append(errs, fmt.Sprintf("repo %s: %s", repo.Name, err))
+				mu.Unlock()
+			}
+			return nil
+		})
 	}
+	_ = g.Wait()
 
 	// Apply teams (org only)
 	if isOrg && len(cfg.Teams) > 0 {

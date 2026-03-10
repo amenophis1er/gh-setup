@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/amenophis1er/gh-setup/internal/config"
 	ghclient "github.com/amenophis1er/gh-setup/internal/github"
 	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -34,10 +36,14 @@ type DiffResult struct {
 }
 
 // Run compares the config against actual GitHub state and prints differences.
-func Run(cfg *config.Config, outputFormat string) error {
+func Run(cfg *config.Config, outputFormat string, concurrency int) error {
 	client, err := ghclient.NewClient()
 	if err != nil {
 		return err
+	}
+
+	if concurrency < 1 {
+		concurrency = 1
 	}
 
 	owner := cfg.Account.Name
@@ -75,10 +81,23 @@ func Run(cfg *config.Config, outputFormat string) error {
 	}
 
 	var result DiffResult
+	var mu sync.Mutex
+
+	g := new(errgroup.Group)
+	g.SetLimit(concurrency)
 
 	for _, repo := range repos {
-		diffRepo(client, cfg, owner, repo, &result)
+		repo := repo
+		g.Go(func() error {
+			var local DiffResult
+			diffRepo(client, cfg, owner, repo, &local)
+			mu.Lock()
+			result.Changes = append(result.Changes, local.Changes...)
+			mu.Unlock()
+			return nil
+		})
 	}
+	_ = g.Wait()
 
 	if cfg.Account.Type == "organization" {
 		for _, team := range cfg.Teams {
