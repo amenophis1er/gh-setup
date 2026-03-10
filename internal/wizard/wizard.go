@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/amenophis1er/gh-setup/internal/config"
+	"github.com/amenophis1er/gh-setup/internal/gitutil"
 	"github.com/amenophis1er/gh-setup/internal/templates"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
@@ -16,8 +17,13 @@ import (
 var validNameRe = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
 // Run executes the interactive wizard and returns the generated config.
-func Run() (*config.Config, error) {
+// If remote is non-empty (e.g. from gitutil.DetectRemote), its Owner and Repo
+// are used as defaults that the user can override in the interactive forms.
+func Run(remote gitutil.Remote) (*config.Config, error) {
 	cfg := &config.Config{}
+	if remote.Owner != "" {
+		cfg.Account.Name = remote.Owner
+	}
 
 	fmt.Println(lipgloss.NewStyle().
 		Bold(true).
@@ -47,7 +53,10 @@ func Run() (*config.Config, error) {
 		return nil, err
 	}
 
-	// Repos
+	// Repos — pre-fill the detected repo so the wizard starts with it.
+	if remote.Repo != "" {
+		cfg.Repos = append(cfg.Repos, config.Repo{Name: remote.Repo})
+	}
 	if err := runReposForm(cfg); err != nil {
 		return nil, err
 	}

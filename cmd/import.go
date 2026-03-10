@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/amenophis1er/gh-setup/internal/config"
+	"github.com/amenophis1er/gh-setup/internal/gitutil"
 	"github.com/amenophis1er/gh-setup/internal/importer"
 	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
@@ -18,26 +19,49 @@ var (
 )
 
 var importCmd = &cobra.Command{
-	Use:   "import <account>",
+	Use:   "import [account]",
 	Short: "Import existing GitHub state into a config file",
 	Long: `Reverse-engineer an existing GitHub account or repo into a gh-setup.yaml config file.
 
+If no account is given and you are inside a git repository with a GitHub remote,
+the owner and repo are inferred automatically.
+
 By default the result is written to gh-setup.yaml (or the path given by --config).
 Use --stdout to print to standard output instead, and --output to choose the format.`,
-	Example: `  gh setup import myorg
-  gh setup import myorg --repo my-repo
-  gh setup import myorg --stdout
-  gh setup import myorg --stdout -o json
+	Example: `  gh setup import                          # auto-detect from git remote
+  gh setup import myorg                    # import entire org
+  gh setup import myorg --repo my-repo     # import a single repo
+  gh setup import --stdout -o json         # auto-detect, JSON to stdout
   gh setup import myorg -o json -c config.json`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if importOutput != "yaml" && importOutput != "json" {
 			return fmt.Errorf("invalid --output value %q: allowed values are \"yaml\" and \"json\"", importOutput)
 		}
 
+		account, repoName := "", importRepoFlag
+
+		if len(args) > 0 {
+			account = args[0]
+		} else {
+			// Auto-detect from git remote
+			remote, err := gitutil.DetectRemote()
+			if err != nil {
+				return fmt.Errorf("detecting git remote: %w", err)
+			}
+			if remote.Owner == "" {
+				return fmt.Errorf("no account specified and could not detect from git remote")
+			}
+			account = remote.Owner
+			if repoName == "" {
+				repoName = remote.Repo
+			}
+			log.Info("Detected from git remote", "account", account, "repo", repoName)
+		}
+
 		opts := importer.Options{
-			Account:     args[0],
-			RepoName:    importRepoFlag,
+			Account:     account,
+			RepoName:    repoName,
 			Concurrency: importConcurrency,
 		}
 
