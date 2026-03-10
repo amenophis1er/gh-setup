@@ -278,6 +278,78 @@ func TestApplyBranchProtection(t *testing.T) {
 	}
 }
 
+func TestApplyRepoSettingsMergeAndFeatures(t *testing.T) {
+	var updated *gh.Repository
+	m := &mock.Client{
+		GetRepoFn: func(owner, name string) (*gh.Repository, error) {
+			return &gh.Repository{
+				Name:                gh.Ptr("my-repo"),
+				Private:             gh.Ptr(false),
+				DeleteBranchOnMerge: gh.Ptr(false),
+				AllowSquashMerge:    gh.Ptr(true),
+				AllowMergeCommit:    gh.Ptr(true),
+				AllowRebaseMerge:    gh.Ptr(true),
+				AllowAutoMerge:      gh.Ptr(false),
+				HasIssues:           gh.Ptr(true),
+				HasWiki:             gh.Ptr(true),
+				HasDiscussions:      gh.Ptr(false),
+			}, nil
+		},
+		UpdateRepoFn: func(owner, name string, repo *gh.Repository) (*gh.Repository, error) {
+			updated = repo
+			return repo, nil
+		},
+		ListLabelsFn: func(owner, repo string) ([]*gh.Label, error) {
+			return nil, nil
+		},
+		GetFileContentFn: func(owner, repo, path string) (string, *string, error) {
+			return "", nil, nil
+		},
+	}
+
+	cfg := &config.Config{
+		Account: config.Account{Type: "individual", Name: "testuser"},
+		Defaults: config.Defaults{
+			Visibility:       "public",
+			DefaultBranch:    "main",
+			AllowSquashMerge: gh.Ptr(true),
+			AllowMergeCommit: gh.Ptr(false), // disable merge commits
+			AllowRebaseMerge: gh.Ptr(false), // disable rebase
+			AllowAutoMerge:   true,
+			HasIssues:        gh.Ptr(true),
+			HasWiki:          gh.Ptr(false), // disable wiki
+			HasDiscussions:   gh.Ptr(true),  // enable discussions
+			BranchProtection: config.BranchProtection{Preset: "none"},
+		},
+		Repos: []config.Repo{
+			{Name: "my-repo"},
+		},
+	}
+
+	err := RunWith(m, cfg, Options{Concurrency: 1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if updated == nil {
+		t.Fatal("expected repo to be updated")
+	}
+	if updated.GetAllowMergeCommit() != false {
+		t.Error("expected allow_merge_commit to be false")
+	}
+	if updated.GetAllowRebaseMerge() != false {
+		t.Error("expected allow_rebase_merge to be false")
+	}
+	if updated.GetAllowAutoMerge() != true {
+		t.Error("expected allow_auto_merge to be true")
+	}
+	if updated.GetHasWiki() != false {
+		t.Error("expected has_wiki to be false")
+	}
+	if updated.GetHasDiscussions() != true {
+		t.Error("expected has_discussions to be true")
+	}
+}
+
 func TestApplyOrgTeamCreate(t *testing.T) {
 	var teamCreated bool
 	var memberAdded string

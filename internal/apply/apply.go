@@ -138,14 +138,34 @@ func applyRepo(client ghclient.GitHubClient, cfg *config.Config, owner string, i
 				return nil
 			}
 			private := visibility == "private"
-			_, err := client.CreateRepo(owner, isOrg, &gh.Repository{
+			newRepo := &gh.Repository{
 				Name:                gh.Ptr(repo.Name),
 				Description:         gh.Ptr(repo.Description),
 				Homepage:            gh.Ptr(repo.Homepage),
 				Private:             gh.Ptr(private),
 				DeleteBranchOnMerge: gh.Ptr(cfg.Defaults.DeleteBranchOnMerge),
+				AllowAutoMerge:      gh.Ptr(cfg.Defaults.AllowAutoMerge),
 				AutoInit:            gh.Ptr(true),
-			})
+			}
+			if cfg.Defaults.AllowSquashMerge != nil {
+				newRepo.AllowSquashMerge = cfg.Defaults.AllowSquashMerge
+			}
+			if cfg.Defaults.AllowMergeCommit != nil {
+				newRepo.AllowMergeCommit = cfg.Defaults.AllowMergeCommit
+			}
+			if cfg.Defaults.AllowRebaseMerge != nil {
+				newRepo.AllowRebaseMerge = cfg.Defaults.AllowRebaseMerge
+			}
+			if cfg.Defaults.HasIssues != nil {
+				newRepo.HasIssues = cfg.Defaults.HasIssues
+			}
+			if cfg.Defaults.HasWiki != nil {
+				newRepo.HasWiki = cfg.Defaults.HasWiki
+			}
+			if cfg.Defaults.HasDiscussions != nil {
+				newRepo.HasDiscussions = cfg.Defaults.HasDiscussions
+			}
+			_, err := client.CreateRepo(owner, isOrg, newRepo)
 			if err != nil {
 				return fmt.Errorf("creating repo %s: %w", repo.Name, err)
 			}
@@ -156,7 +176,14 @@ func applyRepo(client ghclient.GitHubClient, cfg *config.Config, owner string, i
 		needsUpdate := existing.GetDescription() != repo.Description ||
 			existing.GetHomepage() != repo.Homepage ||
 			existing.GetPrivate() != private ||
-			existing.GetDeleteBranchOnMerge() != cfg.Defaults.DeleteBranchOnMerge
+			existing.GetDeleteBranchOnMerge() != cfg.Defaults.DeleteBranchOnMerge ||
+			existing.GetAllowAutoMerge() != cfg.Defaults.AllowAutoMerge ||
+			(cfg.Defaults.AllowSquashMerge != nil && existing.GetAllowSquashMerge() != *cfg.Defaults.AllowSquashMerge) ||
+			(cfg.Defaults.AllowMergeCommit != nil && existing.GetAllowMergeCommit() != *cfg.Defaults.AllowMergeCommit) ||
+			(cfg.Defaults.AllowRebaseMerge != nil && existing.GetAllowRebaseMerge() != *cfg.Defaults.AllowRebaseMerge) ||
+			(cfg.Defaults.HasIssues != nil && existing.GetHasIssues() != *cfg.Defaults.HasIssues) ||
+			(cfg.Defaults.HasWiki != nil && existing.GetHasWiki() != *cfg.Defaults.HasWiki) ||
+			(cfg.Defaults.HasDiscussions != nil && existing.GetHasDiscussions() != *cfg.Defaults.HasDiscussions)
 
 		if needsUpdate {
 			if opts.DryRun {
@@ -165,12 +192,32 @@ func applyRepo(client ghclient.GitHubClient, cfg *config.Config, owner string, i
 				if opts.Interactive && !confirm(fmt.Sprintf("Update repo %s settings?", repo.Name), opts) {
 					logSkip("repo " + repo.Name)
 				} else {
-					_, err := client.UpdateRepo(owner, repo.Name, &gh.Repository{
+					update := &gh.Repository{
 						Description:         gh.Ptr(repo.Description),
 						Homepage:            gh.Ptr(repo.Homepage),
 						Private:             gh.Ptr(private),
 						DeleteBranchOnMerge: gh.Ptr(cfg.Defaults.DeleteBranchOnMerge),
-					})
+						AllowAutoMerge:      gh.Ptr(cfg.Defaults.AllowAutoMerge),
+					}
+					if cfg.Defaults.AllowSquashMerge != nil {
+						update.AllowSquashMerge = cfg.Defaults.AllowSquashMerge
+					}
+					if cfg.Defaults.AllowMergeCommit != nil {
+						update.AllowMergeCommit = cfg.Defaults.AllowMergeCommit
+					}
+					if cfg.Defaults.AllowRebaseMerge != nil {
+						update.AllowRebaseMerge = cfg.Defaults.AllowRebaseMerge
+					}
+					if cfg.Defaults.HasIssues != nil {
+						update.HasIssues = cfg.Defaults.HasIssues
+					}
+					if cfg.Defaults.HasWiki != nil {
+						update.HasWiki = cfg.Defaults.HasWiki
+					}
+					if cfg.Defaults.HasDiscussions != nil {
+						update.HasDiscussions = cfg.Defaults.HasDiscussions
+					}
+					_, err := client.UpdateRepo(owner, repo.Name, update)
 					if err != nil {
 						return fmt.Errorf("updating repo %s: %w", repo.Name, err)
 					}

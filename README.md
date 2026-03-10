@@ -174,6 +174,13 @@ defaults:
   visibility: public          # public | private
   default_branch: main
   delete_branch_on_merge: true
+  allow_squash_merge: true     # omit to leave unchanged
+  allow_merge_commit: false    # omit to leave unchanged
+  allow_rebase_merge: true     # omit to leave unchanged
+  allow_auto_merge: true       # enable auto-merge
+  has_issues: true             # omit to leave unchanged
+  has_wiki: false              # omit to leave unchanged
+  has_discussions: false       # omit to leave unchanged
   branch_protection:
     preset: standard           # none | basic | standard | strict | custom
     # Custom overrides (only when preset: custom):

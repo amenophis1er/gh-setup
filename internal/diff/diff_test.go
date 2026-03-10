@@ -211,6 +211,122 @@ func TestDiffTeamMemberChanges(t *testing.T) {
 	}
 }
 
+func TestDiffDetectsMergeStrategyChanges(t *testing.T) {
+	m := &mock.Client{
+		GetRepoFn: func(owner, name string) (*gh.Repository, error) {
+			return &gh.Repository{
+				Name:                gh.Ptr("my-repo"),
+				Private:             gh.Ptr(false),
+				DeleteBranchOnMerge: gh.Ptr(false),
+				AllowSquashMerge:    gh.Ptr(true),
+				AllowMergeCommit:    gh.Ptr(true),
+				AllowRebaseMerge:    gh.Ptr(true),
+				AllowAutoMerge:      gh.Ptr(false),
+				HasWiki:             gh.Ptr(true),
+				HasDiscussions:      gh.Ptr(false),
+			}, nil
+		},
+		ListLabelsFn: func(owner, repo string) ([]*gh.Label, error) {
+			return nil, nil
+		},
+		GetBranchProtectionFn: func(owner, repo, branch string) (*gh.Protection, error) {
+			return nil, nil
+		},
+	}
+
+	cfg := &config.Config{
+		Account: config.Account{Type: "individual", Name: "testuser"},
+		Defaults: config.Defaults{
+			Visibility:       "public",
+			DefaultBranch:    "main",
+			AllowSquashMerge: gh.Ptr(true),
+			AllowMergeCommit: gh.Ptr(false), // want to disable
+			AllowRebaseMerge: gh.Ptr(true),
+			AllowAutoMerge:   true, // want to enable
+			HasWiki:          gh.Ptr(false),
+			HasDiscussions:   gh.Ptr(true),
+			BranchProtection: config.BranchProtection{Preset: "none"},
+		},
+		Repos: []config.Repo{
+			{Name: "my-repo"},
+		},
+	}
+
+	var result DiffResult
+	diffRepo(m, cfg, "testuser", cfg.Repos[0], &result)
+
+	expected := map[string]bool{
+		"allow_merge_commit": false,
+		"allow_auto_merge":   false,
+		"has_wiki":           false,
+		"has_discussions":    false,
+	}
+	for _, c := range result.Changes {
+		if _, ok := expected[c.Field]; ok && c.Action == "change" {
+			expected[c.Field] = true
+		}
+	}
+	for field, found := range expected {
+		if !found {
+			t.Errorf("expected change for %s, but not found", field)
+		}
+	}
+}
+
+func TestDiffIgnoresUnsetBoolPtrs(t *testing.T) {
+	m := &mock.Client{
+		GetRepoFn: func(owner, name string) (*gh.Repository, error) {
+			return &gh.Repository{
+				Name:                gh.Ptr("my-repo"),
+				Private:             gh.Ptr(false),
+				DeleteBranchOnMerge: gh.Ptr(false),
+				AllowSquashMerge:    gh.Ptr(true),
+				AllowMergeCommit:    gh.Ptr(true),
+				AllowRebaseMerge:    gh.Ptr(true),
+				HasIssues:           gh.Ptr(true),
+				HasWiki:             gh.Ptr(true),
+				HasDiscussions:      gh.Ptr(false),
+			}, nil
+		},
+		ListLabelsFn: func(owner, repo string) ([]*gh.Label, error) {
+			return nil, nil
+		},
+		GetBranchProtectionFn: func(owner, repo, branch string) (*gh.Protection, error) {
+			return nil, nil
+		},
+	}
+
+	// All *bool fields left nil — should produce no changes for those fields
+	cfg := &config.Config{
+		Account: config.Account{Type: "individual", Name: "testuser"},
+		Defaults: config.Defaults{
+			Visibility:       "public",
+			DefaultBranch:    "main",
+			BranchProtection: config.BranchProtection{Preset: "none"},
+		},
+		Repos: []config.Repo{
+			{Name: "my-repo"},
+		},
+	}
+
+	var result DiffResult
+	diffRepo(m, cfg, "testuser", cfg.Repos[0], &result)
+
+	boolPtrFields := map[string]bool{
+		"allow_squash_merge": true,
+		"allow_merge_commit": true,
+		"allow_rebase_merge": true,
+		"has_issues":         true,
+		"has_wiki":           true,
+		"has_discussions":    true,
+	}
+	for _, c := range result.Changes {
+		if boolPtrFields[c.Field] {
+			t.Errorf("unexpected change for unset field %s", c.Field)
+		}
+	}
+}
+
 func TestDiffDescriptionChange(t *testing.T) {
 	m := &mock.Client{
 		GetRepoFn: func(owner, name string) (*gh.Repository, error) {

@@ -34,6 +34,13 @@ type Defaults struct {
 	Visibility          string           `yaml:"visibility" json:"visibility"`
 	DefaultBranch       string           `yaml:"default_branch" json:"default_branch"`
 	DeleteBranchOnMerge bool             `yaml:"delete_branch_on_merge" json:"delete_branch_on_merge"`
+	AllowSquashMerge    *bool            `yaml:"allow_squash_merge,omitempty" json:"allow_squash_merge,omitempty"`
+	AllowMergeCommit    *bool            `yaml:"allow_merge_commit,omitempty" json:"allow_merge_commit,omitempty"`
+	AllowRebaseMerge    *bool            `yaml:"allow_rebase_merge,omitempty" json:"allow_rebase_merge,omitempty"`
+	AllowAutoMerge      bool             `yaml:"allow_auto_merge" json:"allow_auto_merge"`
+	HasIssues           *bool            `yaml:"has_issues,omitempty" json:"has_issues,omitempty"`
+	HasWiki             *bool            `yaml:"has_wiki,omitempty" json:"has_wiki,omitempty"`
+	HasDiscussions      *bool            `yaml:"has_discussions,omitempty" json:"has_discussions,omitempty"`
 	BranchProtection    BranchProtection `yaml:"branch_protection" json:"branch_protection"`
 }
 

@@ -213,6 +213,22 @@ func diffRepo(client ghclient.GitHubClient, cfg *config.Config, owner string, re
 		})
 	}
 
+	if existing.GetAllowAutoMerge() != cfg.Defaults.AllowAutoMerge {
+		changes = true
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: resType, Field: "allow_auto_merge", Action: "change",
+			Old: fmt.Sprintf("%v", existing.GetAllowAutoMerge()), New: fmt.Sprintf("%v", cfg.Defaults.AllowAutoMerge),
+		})
+	}
+
+	// Merge strategies and features — only diff when explicitly configured (non-nil)
+	diffBoolPtr(existing.GetAllowSquashMerge(), cfg.Defaults.AllowSquashMerge, "allow_squash_merge", resource, resType, result, &changes)
+	diffBoolPtr(existing.GetAllowMergeCommit(), cfg.Defaults.AllowMergeCommit, "allow_merge_commit", resource, resType, result, &changes)
+	diffBoolPtr(existing.GetAllowRebaseMerge(), cfg.Defaults.AllowRebaseMerge, "allow_rebase_merge", resource, resType, result, &changes)
+	diffBoolPtr(existing.GetHasIssues(), cfg.Defaults.HasIssues, "has_issues", resource, resType, result, &changes)
+	diffBoolPtr(existing.GetHasWiki(), cfg.Defaults.HasWiki, "has_wiki", resource, resType, result, &changes)
+	diffBoolPtr(existing.GetHasDiscussions(), cfg.Defaults.HasDiscussions, "has_discussions", resource, resType, result, &changes)
+
 	// Labels diff
 	diffLabels(client, owner, repo.Name, cfg.Labels, resource, result)
 
@@ -376,4 +392,15 @@ func boolToVisibility(private bool) string {
 		return "private"
 	}
 	return "public"
+}
+
+// diffBoolPtr adds a change only when desired is explicitly set (non-nil) and differs from actual.
+func diffBoolPtr(actual bool, desired *bool, field, resource, resType string, result *DiffResult, changes *bool) {
+	if desired != nil && actual != *desired {
+		*changes = true
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: resType, Field: field, Action: "change",
+			Old: fmt.Sprintf("%v", actual), New: fmt.Sprintf("%v", *desired),
+		})
+	}
 }

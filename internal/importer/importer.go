@@ -166,6 +166,13 @@ func inferDefaults(cfg *config.Config, client ghclient.GitHubClient, owner, repo
 
 	cfg.Defaults.DefaultBranch = repo.GetDefaultBranch()
 	cfg.Defaults.DeleteBranchOnMerge = repo.GetDeleteBranchOnMerge()
+	cfg.Defaults.AllowAutoMerge = repo.GetAllowAutoMerge()
+	cfg.Defaults.AllowSquashMerge = gh.Ptr(repo.GetAllowSquashMerge())
+	cfg.Defaults.AllowMergeCommit = gh.Ptr(repo.GetAllowMergeCommit())
+	cfg.Defaults.AllowRebaseMerge = gh.Ptr(repo.GetAllowRebaseMerge())
+	cfg.Defaults.HasIssues = gh.Ptr(repo.GetHasIssues())
+	cfg.Defaults.HasWiki = gh.Ptr(repo.GetHasWiki())
+	cfg.Defaults.HasDiscussions = gh.Ptr(repo.GetHasDiscussions())
 
 	if repo.GetPrivate() {
 		cfg.Defaults.Visibility = "private"
