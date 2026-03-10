@@ -1,6 +1,6 @@
 # gh-setup
 
-A CLI tool that declaratively configures GitHub accounts, repositories, branch protection, teams, labels, CI workflows, governance files, and security settings from a single YAML config file.
+**Stop clicking through GitHub settings tabs.** Define your repos, branch rules, labels, teams, CI, and security in one YAML file — then apply it in seconds. Unlike Terraform (heavy, HCL, state files) or shell scripts (fragile, no drift detection), gh-setup is purpose-built for GitHub: zero state management, idempotent, and interactive when you want it.
 
 Installable as a standalone binary or as a [`gh` CLI](https://cli.github.com/) extension.
 
@@ -21,13 +21,6 @@ Installable as a standalone binary or as a [`gh` CLI](https://cli.github.com/) e
 
 ## Installation
 
-### Homebrew
-
-```bash
-brew tap amenophis1er/tap
-brew install gh-setup
-```
-
 ### As a `gh` CLI extension (recommended)
 
 ```bash
@@ -35,6 +28,15 @@ gh extension install amenophis1er/gh-setup
 ```
 
 Then use it as `gh setup <command>`.
+
+### Homebrew
+
+```bash
+brew tap amenophis1er/tap
+brew install gh-setup
+```
+
+> Requires a tagged release. See [Releases](https://github.com/amenophis1er/gh-setup/releases).
 
 ### From source
 
@@ -196,7 +198,8 @@ repos:
     visibility: private        # overrides default
     homepage: "https://example.com"
     ci: go                     # go | rust | node | python | docker | terraform | java | ruby
-    extra_protection: {}       # repo-specific protection overrides
+    extra_protection:          # overrides defaults.branch_protection for this repo only
+      preset: strict
   - name: my-frontend
     description: "Web frontend"
     topics: ["frontend", "react"]
@@ -226,9 +229,9 @@ security:
 
 secrets:                       # names only — values prompted at apply time
   - name: DEPLOY_TOKEN
-    scope: org                 # org | repo
+    scope: org                 # org-level secret (available to all repos)
   - name: NPM_TOKEN
-    scope: repo
+    scope: repo                # set on every repo listed in repos:
 ```
 
 ## Branch Protection Presets
