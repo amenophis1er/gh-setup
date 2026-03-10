@@ -27,6 +27,7 @@ brews:
     repository:
       owner: amenophis1er
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: "https://github.com/amenophis1er/gh-setup"
     description: "A CLI tool that declaratively configures GitHub accounts, repositories, branch protection, teams, labels, CI, and governance from a YAML config file."
     license: "MIT"
