@@ -38,6 +38,23 @@ func NewClient() (*Client, error) {
 	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
 	tc := oauth2.NewClient(ctx, ts)
 
+	// Support GitHub Enterprise via GH_HOST or GITHUB_API_URL
+	apiURL := os.Getenv("GITHUB_API_URL")
+	if apiURL == "" {
+		if host := os.Getenv("GH_HOST"); host != "" && host != "github.com" {
+			apiURL = "https://" + host + "/api/v3/"
+		}
+	}
+
+	if apiURL != "" {
+		uploadURL := strings.TrimSuffix(apiURL, "/") + "/../uploads/"
+		ghClient, err := gh.NewClient(tc).WithEnterpriseURLs(apiURL, uploadURL)
+		if err != nil {
+			return nil, fmt.Errorf("configuring enterprise client: %w", err)
+		}
+		return &Client{Client: ghClient, ctx: ctx}, nil
+	}
+
 	return &Client{
 		Client: gh.NewClient(tc),
 		ctx:    ctx,
