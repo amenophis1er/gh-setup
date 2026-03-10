@@ -56,6 +56,24 @@ func (c *Client) ListTeamMembers(org, slug string) ([]*gh.User, error) {
 	return all, nil
 }
 
+// ListOrgTeams lists all teams in an organization.
+func (c *Client) ListOrgTeams(org string) ([]*gh.Team, error) {
+	var all []*gh.Team
+	opts := &gh.ListOptions{PerPage: 100}
+	for {
+		teams, resp, err := c.Teams.ListTeams(c.ctx, org, opts)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, teams...)
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+	return all, nil
+}
+
 // AddTeamMember adds a user to a team.
 func (c *Client) AddTeamMember(org, slug, username string) error {
 	_, _, err := c.Teams.AddTeamMembershipBySlug(c.ctx, org, slug, username, nil)

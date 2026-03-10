@@ -9,9 +9,11 @@ Installable as a standalone binary or as a [`gh` CLI](https://cli.github.com/) e
 - **Interactive wizard** — generates a complete `gh-setup.yaml` through guided prompts
 - **Idempotent apply** — only mutates what has drifted, safe to run repeatedly
 - **Dry-run mode** — preview every change before it happens
-- **Diff** — compare your config against live GitHub state
+- **Diff** — compare your config against live GitHub state (text or JSON output)
 - **Branch protection presets** — none, basic, standard, strict, or fully custom
-- **CI workflow templates** — Go, Rust, Node.js, Python (embedded, zero external deps)
+- **Import** — reverse-engineer config from an existing GitHub account or repo
+- **CI workflow templates** — Go, Rust, Node.js, Python, Docker, Terraform, Java, Ruby (embedded)
+- **Pipeline-friendly** — `--non-interactive` mode with secrets via env vars for CI/CD
 - **Governance files** — CONTRIBUTING.md, Code of Conduct, SECURITY.md, CODEOWNERS
 - **Security** — Dependabot, secret scanning, code scanning, dependabot.yml generation
 - **Secrets management** — org and repo-level secrets (values prompted securely at apply time)
@@ -84,6 +86,18 @@ If you use the `gh` CLI, you likely already have `GH_TOKEN` set. The token needs
 
 ## Commands
 
+### `gh setup import`
+
+Reverse-engineer an existing GitHub account or repo into a config file.
+
+```bash
+gh setup import myorg                    # import entire org
+gh setup import myuser --repo my-repo    # import a single repo
+gh setup import myorg -c existing.yaml   # write to a custom file
+```
+
+This fetches repos, labels, branch protection, teams, governance files, and security settings from the live GitHub state and generates a complete `gh-setup.yaml`. Great for adopting gh-setup on existing projects.
+
 ### `gh setup init`
 
 Interactive wizard that walks you through every configuration option and writes `gh-setup.yaml`.
@@ -102,6 +116,7 @@ gh setup apply                # apply all changes
 gh setup apply --dry-run      # preview changes without mutating
 gh setup apply -i             # confirm each change interactively
 gh setup apply -c other.yaml  # use a different config file
+gh setup apply --non-interactive  # no prompts (for CI/CD pipelines)
 ```
 
 ### `gh setup diff`
@@ -109,10 +124,12 @@ gh setup apply -c other.yaml  # use a different config file
 Compares your config file against the actual GitHub state and prints the differences.
 
 ```bash
-gh setup diff
+gh setup diff                    # styled text output
+gh setup diff --output json      # JSON output for CI pipelines
+gh setup diff -o json | jq .     # pipe to jq for processing
 ```
 
-Example output:
+Example text output:
 
 ```
   repo x-phone/xphone-rust
@@ -178,7 +195,7 @@ repos:
     topics: ["api", "rest", "go"]
     visibility: private        # overrides default
     homepage: "https://example.com"
-    ci: go                     # go | rust | node | python
+    ci: go                     # go | rust | node | python | docker | terraform | java | ruby
     extra_protection: {}       # repo-specific protection overrides
   - name: my-frontend
     description: "Web frontend"
@@ -236,6 +253,10 @@ Built-in templates embedded in the binary:
 | **rust** | `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test` |
 | **node** | `npm ci`, `npm run lint`, `npm test` |
 | **python** | `ruff check`, `mypy`, `pytest` |
+| **docker** | `docker/build-push-action` (build only) |
+| **terraform** | `terraform fmt -check`, `terraform validate`, `terraform plan` |
+| **java** | `mvn verify` (Temurin JDK 21, Maven cache) |
+| **ruby** | `bundle exec rubocop`, `bundle exec rspec` |
 
 Templates are written to `.github/workflows/ci.yml` in each repository.
 
@@ -251,6 +272,34 @@ Each resource follows the same pattern:
 
 In `--dry-run` mode, step 4 is replaced with a preview log.
 In `-i` (interactive) mode, step 4 requires confirmation.
+In `--non-interactive` mode, all confirmations are auto-approved.
+
+## CI/CD Usage
+
+Run gh-setup in pipelines with `--non-interactive`. Secrets are read from env vars named `GH_SETUP_SECRET_<NAME>`:
+
+```yaml
+# .github/workflows/setup.yml
+- name: Apply GitHub config
+  env:
+    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    GH_SETUP_SECRET_DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+  run: gh-setup apply --non-interactive
+```
+
+Detect config drift in CI:
+
+```yaml
+- name: Check for drift
+  env:
+    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  run: |
+    CHANGES=$(gh-setup diff -o json | jq '.changes | length')
+    if [ "$CHANGES" -gt 0 ]; then
+      echo "Drift detected: $CHANGES change(s)"
+      exit 1
+    fi
+```
 
 ## Config Validation
 
@@ -270,8 +319,9 @@ gh-setup/
 ├── cmd/
 │   ├── root.go                 # root command, --config flag, version
 │   ├── init.go                 # init wizard command
-│   ├── apply.go                # apply command (--dry-run, -i)
-│   └── diff.go                 # diff command
+│   ├── import.go               # import from live GitHub state
+│   ├── apply.go                # apply command (--dry-run, -i, --non-interactive)
+│   └── diff.go                 # diff command (--output text/json)
 ├── internal/
 │   ├── config/config.go        # YAML structs, Load/Save, Validate, presets
 │   ├── wizard/wizard.go        # interactive wizard (charmbracelet/huh)
@@ -288,11 +338,12 @@ gh-setup/
 │   │   ├── ci.go               # embedded CI workflow loader
 │   │   ├── governance.go       # CONTRIBUTING, CoC, SECURITY templates
 │   │   ├── dependabot.go       # dependabot.yml generation
-│   │   └── workflows/          # CI YAML templates (go, rust, node, python)
+│   │   └── workflows/          # CI YAML templates (8 languages/tools)
 │   ├── apply/
 │   │   ├── apply.go            # idempotent apply logic
 │   │   └── output.go           # styled terminal output
-│   └── diff/diff.go            # config vs live state comparison
+│   ├── diff/diff.go            # config vs live state comparison (text + JSON)
+│   └── importer/importer.go    # reverse-engineer config from GitHub
 ├── Makefile
 ├── .goreleaser.yml
 └── .github/workflows/

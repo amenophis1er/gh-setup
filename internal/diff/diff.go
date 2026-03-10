@@ -1,6 +1,7 @@
 package diff
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -17,8 +18,23 @@ var (
 	okStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 )
 
+// Change represents a single diff entry between desired and actual state.
+type Change struct {
+	Resource string `json:"resource"`
+	Type     string `json:"type"`
+	Field    string `json:"field"`
+	Old      string `json:"old,omitempty"`
+	New      string `json:"new,omitempty"`
+	Action   string `json:"action"`
+}
+
+// DiffResult holds all collected changes from a diff run.
+type DiffResult struct {
+	Changes []Change `json:"changes"`
+}
+
 // Run compares the config against actual GitHub state and prints differences.
-func Run(cfg *config.Config) error {
+func Run(cfg *config.Config, outputFormat string) error {
 	client, err := ghclient.NewClient()
 	if err != nil {
 		return err
@@ -58,30 +74,88 @@ func Run(cfg *config.Config) error {
 		repos = merged
 	}
 
+	var result DiffResult
+
 	for _, repo := range repos {
-		diffRepo(client, cfg, owner, repo)
+		diffRepo(client, cfg, owner, repo, &result)
 	}
 
 	if cfg.Account.Type == "organization" {
 		for _, team := range cfg.Teams {
-			diffTeam(client, owner, team)
+			diffTeam(client, owner, team, &result)
 		}
+	}
+
+	if outputFormat == "json" {
+		data, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshalling JSON: %w", err)
+		}
+		fmt.Println(string(data))
+	} else {
+		printTextOutput(result, owner, cfg)
 	}
 
 	return nil
 }
 
-func diffRepo(client *ghclient.Client, cfg *config.Config, owner string, repo config.Repo) {
-	fmt.Println()
-	fmt.Println(headerStyle.Render(fmt.Sprintf("  repo %s/%s", owner, repo.Name)))
+func printTextOutput(result DiffResult, owner string, cfg *config.Config) {
+	// Group changes by resource for display
+	currentResource := ""
+	resourceHasChanges := make(map[string]bool)
+
+	// Pre-scan to determine which resources have real changes (not just "ok")
+	for _, c := range result.Changes {
+		if c.Action != "ok" {
+			resourceHasChanges[c.Resource] = true
+		}
+	}
+
+	for _, c := range result.Changes {
+		if c.Resource != currentResource {
+			currentResource = c.Resource
+			fmt.Println()
+			fmt.Println(headerStyle.Render(fmt.Sprintf("  %s %s", c.Type, c.Resource)))
+		}
+
+		switch c.Action {
+		case "add":
+			if c.Field != "" {
+				fmt.Println(addStyle.Render(fmt.Sprintf("    %s: + %s", c.Field, c.New)))
+			} else {
+				fmt.Println(addStyle.Render(fmt.Sprintf("    + %s", c.New)))
+			}
+		case "remove":
+			if c.Field != "" {
+				fmt.Println(removeStyle.Render(fmt.Sprintf("    %s: - %s", c.Field, c.Old)))
+			} else {
+				fmt.Println(removeStyle.Render(fmt.Sprintf("    - %s", c.Old)))
+			}
+		case "change":
+			fmt.Println(changeStyle.Render(fmt.Sprintf("    %s:  %s → %s", c.Field, c.Old, c.New)))
+		case "ok":
+			fmt.Println(okStyle.Render(fmt.Sprintf("    %s", c.New)))
+		case "error":
+			fmt.Printf("    %s: %s\n", c.Field, c.New)
+		}
+	}
+}
+
+func diffRepo(client *ghclient.Client, cfg *config.Config, owner string, repo config.Repo, result *DiffResult) {
+	resource := fmt.Sprintf("%s/%s", owner, repo.Name)
+	resType := "repo"
 
 	existing, err := client.GetRepo(owner, repo.Name)
 	if err != nil {
-		fmt.Printf("    error: %v\n", err)
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: resType, Field: "error", Action: "error", New: fmt.Sprintf("%v", err),
+		})
 		return
 	}
 	if existing == nil {
-		fmt.Println(addStyle.Render("    + repo does not exist (will be created)"))
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: resType, Action: "add", New: "repo does not exist (will be created)",
+		})
 		return
 	}
 
@@ -94,41 +168,51 @@ func diffRepo(client *ghclient.Client, cfg *config.Config, owner string, repo co
 	private := visibility == "private"
 	if existing.GetPrivate() != private {
 		changes = true
-		fmt.Println(changeStyle.Render(fmt.Sprintf("    visibility:  %s → %s",
-			boolToVisibility(existing.GetPrivate()), visibility)))
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: resType, Field: "visibility", Action: "change",
+			Old: boolToVisibility(existing.GetPrivate()), New: visibility,
+		})
 	}
 
 	if existing.GetDescription() != repo.Description {
 		changes = true
-		fmt.Println(changeStyle.Render(fmt.Sprintf("    description:  %q → %q",
-			existing.GetDescription(), repo.Description)))
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: resType, Field: "description", Action: "change",
+			Old: fmt.Sprintf("%q", existing.GetDescription()), New: fmt.Sprintf("%q", repo.Description),
+		})
 	}
 
 	if existing.GetDeleteBranchOnMerge() != cfg.Defaults.DeleteBranchOnMerge {
 		changes = true
-		fmt.Println(changeStyle.Render(fmt.Sprintf("    delete_branch_on_merge:  %v → %v",
-			existing.GetDeleteBranchOnMerge(), cfg.Defaults.DeleteBranchOnMerge)))
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: resType, Field: "delete_branch_on_merge", Action: "change",
+			Old: fmt.Sprintf("%v", existing.GetDeleteBranchOnMerge()), New: fmt.Sprintf("%v", cfg.Defaults.DeleteBranchOnMerge),
+		})
 	}
 
 	// Labels diff
-	diffLabels(client, owner, repo.Name, cfg.Labels)
+	diffLabels(client, owner, repo.Name, cfg.Labels, resource, result)
 
 	// Branch protection diff
 	branch := cfg.Defaults.DefaultBranch
 	if branch == "" {
 		branch = "main"
 	}
-	diffProtection(client, cfg, owner, repo, branch)
+	diffProtection(client, cfg, owner, repo, branch, resource, result)
 
 	if !changes {
-		fmt.Println(okStyle.Render("    ✓ up to date"))
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: resType, Action: "ok", New: "\u2713 up to date",
+		})
 	}
 }
 
-func diffLabels(client *ghclient.Client, owner, repo string, labels config.Labels) {
+func diffLabels(client *ghclient.Client, owner, repo string, labels config.Labels, resource string, result *DiffResult) {
 	existing, err := client.ListLabels(owner, repo)
 	if err != nil {
-		fmt.Printf("    labels error: %v\n", err)
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: "repo", Field: "labels error", Action: "error", New: fmt.Sprintf("%v", err),
+		})
 		return
 	}
 
@@ -145,7 +229,10 @@ func diffLabels(client *ghclient.Client, owner, repo string, labels config.Label
 	for _, l := range labels.Items {
 		key := strings.ToLower(l.Name)
 		if _, ok := existingMap[key]; !ok {
-			fmt.Println(addStyle.Render(fmt.Sprintf("    labels: + %s (%s)", l.Name, l.Color)))
+			result.Changes = append(result.Changes, Change{
+				Resource: resource, Type: "label", Field: "labels", Action: "add",
+				New: fmt.Sprintf("%s (%s)", l.Name, l.Color),
+			})
 		}
 	}
 
@@ -153,13 +240,16 @@ func diffLabels(client *ghclient.Client, owner, repo string, labels config.Label
 		for _, l := range existing {
 			key := strings.ToLower(l.GetName())
 			if _, ok := desiredMap[key]; !ok {
-				fmt.Println(removeStyle.Render(fmt.Sprintf("    labels: - %s (%s)", l.GetName(), l.GetColor())))
+				result.Changes = append(result.Changes, Change{
+					Resource: resource, Type: "label", Field: "labels", Action: "remove",
+					Old: fmt.Sprintf("%s (%s)", l.GetName(), l.GetColor()),
+				})
 			}
 		}
 	}
 }
 
-func diffProtection(client *ghclient.Client, cfg *config.Config, owner string, repo config.Repo, branch string) {
+func diffProtection(client *ghclient.Client, cfg *config.Config, owner string, repo config.Repo, branch string, resource string, result *DiffResult) {
 	bp := config.ResolveProtection(cfg.Defaults.BranchProtection.Preset)
 	if cfg.Defaults.BranchProtection.Preset == "custom" {
 		bp = cfg.Defaults.BranchProtection
@@ -174,44 +264,60 @@ func diffProtection(client *ghclient.Client, cfg *config.Config, owner string, r
 	}
 
 	if existing == nil && bp.Preset != "none" {
-		fmt.Println(addStyle.Render("    branch_protection: not set (will be created)"))
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: "repo", Field: "branch_protection", Action: "add",
+			New: "not set (will be created)",
+		})
 		return
 	}
 
 	if existing != nil {
 		if bp.RequirePR {
 			if existing.RequiredPullRequestReviews == nil {
-				fmt.Println(changeStyle.Render("    branch_protection.require_pr:  false → true"))
+				result.Changes = append(result.Changes, Change{
+					Resource: resource, Type: "repo", Field: "branch_protection.require_pr", Action: "change",
+					Old: "false", New: "true",
+				})
 			}
 		}
 		if existing.AllowForcePushes != nil && existing.AllowForcePushes.Enabled != bp.AllowForcePush {
-			fmt.Println(changeStyle.Render(fmt.Sprintf("    branch_protection.allow_force_push:  %v → %v",
-				existing.AllowForcePushes.Enabled, bp.AllowForcePush)))
+			result.Changes = append(result.Changes, Change{
+				Resource: resource, Type: "repo", Field: "branch_protection.allow_force_push", Action: "change",
+				Old: fmt.Sprintf("%v", existing.AllowForcePushes.Enabled), New: fmt.Sprintf("%v", bp.AllowForcePush),
+			})
 		}
 		if existing.AllowDeletions != nil && existing.AllowDeletions.Enabled != bp.AllowDeletions {
-			fmt.Println(changeStyle.Render(fmt.Sprintf("    branch_protection.allow_deletions:  %v → %v",
-				existing.AllowDeletions.Enabled, bp.AllowDeletions)))
+			result.Changes = append(result.Changes, Change{
+				Resource: resource, Type: "repo", Field: "branch_protection.allow_deletions", Action: "change",
+				Old: fmt.Sprintf("%v", existing.AllowDeletions.Enabled), New: fmt.Sprintf("%v", bp.AllowDeletions),
+			})
 		}
 	}
 }
 
-func diffTeam(client *ghclient.Client, org string, team config.Team) {
-	fmt.Println()
-	fmt.Println(headerStyle.Render(fmt.Sprintf("  team %s", team.Name)))
+func diffTeam(client *ghclient.Client, org string, team config.Team, result *DiffResult) {
+	resource := team.Name
+	resType := "team"
 
 	existing, err := client.GetTeam(org, team.Name)
 	if err != nil {
-		fmt.Printf("    error: %v\n", err)
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: resType, Field: "error", Action: "error", New: fmt.Sprintf("%v", err),
+		})
 		return
 	}
 	if existing == nil {
-		fmt.Println(addStyle.Render("    + team does not exist (will be created)"))
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: resType, Action: "add", New: "team does not exist (will be created)",
+		})
 		return
 	}
 
 	members, err := client.ListTeamMembers(org, team.Name)
 	if err != nil {
-		fmt.Printf("    members error: %v\n", err)
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: resType, Field: "members error", Action: "error", New: fmt.Sprintf("%v", err),
+		})
 		return
 	}
 
@@ -227,13 +333,17 @@ func diffTeam(client *ghclient.Client, org string, team config.Team) {
 
 	for _, m := range team.Members {
 		if !memberMap[m] {
-			fmt.Println(addStyle.Render(fmt.Sprintf("    + member: %s", m)))
+			result.Changes = append(result.Changes, Change{
+				Resource: resource, Type: resType, Field: "member", Action: "add", New: m,
+			})
 		}
 	}
 
 	for _, m := range members {
 		if !desiredMap[m.GetLogin()] {
-			fmt.Println(removeStyle.Render(fmt.Sprintf("    - member: %s", m.GetLogin())))
+			result.Changes = append(result.Changes, Change{
+				Resource: resource, Type: resType, Field: "member", Action: "remove", Old: m.GetLogin(),
+			})
 		}
 	}
 }

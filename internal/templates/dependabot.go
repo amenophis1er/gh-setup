@@ -33,6 +33,14 @@ func CIToEcosystem(ci string) string {
 		return "npm"
 	case "python":
 		return "pip"
+	case "java":
+		return "maven"
+	case "ruby":
+		return "bundler"
+	case "docker":
+		return "docker"
+	case "terraform":
+		return "terraform"
 	default:
 		return ""
 	}

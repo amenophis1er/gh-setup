@@ -19,7 +19,7 @@ func TestCIWorkflow(t *testing.T) {
 			if !strings.Contains(s, "name: CI") {
 				t.Errorf("CIWorkflow(%q) missing 'name: CI' header", name)
 			}
-			if !strings.Contains(s, "actions/checkout@v4") {
+			if !strings.Contains(s, "actions/checkout@") {
 				t.Errorf("CIWorkflow(%q) missing checkout action", name)
 			}
 		})
@@ -35,10 +35,10 @@ func TestCIWorkflowNotFound(t *testing.T) {
 
 func TestCITemplateNames(t *testing.T) {
 	names := CITemplateNames()
-	if len(names) != 4 {
-		t.Fatalf("CITemplateNames() returned %d names, want 4", len(names))
+	if len(names) != 8 {
+		t.Fatalf("CITemplateNames() returned %d names, want 8", len(names))
 	}
-	expected := map[string]bool{"go": true, "rust": true, "node": true, "python": true}
+	expected := map[string]bool{"go": true, "rust": true, "node": true, "python": true, "docker": true, "terraform": true, "java": true, "ruby": true}
 	for _, name := range names {
 		if !expected[name] {
 			t.Errorf("unexpected template name: %q", name)

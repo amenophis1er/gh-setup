@@ -2,6 +2,7 @@ package apply
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/amenophis1er/gh-setup/internal/config"
@@ -13,8 +14,9 @@ import (
 
 // Options configures the apply behavior.
 type Options struct {
-	DryRun      bool
-	Interactive bool
+	DryRun         bool
+	Interactive    bool
+	NonInteractive bool
 }
 
 // Run applies the config to GitHub.
@@ -105,7 +107,7 @@ func applyRepo(client *ghclient.Client, cfg *config.Config, owner string, isOrg 
 		if opts.DryRun {
 			logDryRun("create", "repo "+repo.Name)
 		} else {
-			if opts.Interactive && !confirm(fmt.Sprintf("Create repo %s?", repo.Name)) {
+			if opts.Interactive && !confirm(fmt.Sprintf("Create repo %s?", repo.Name), opts) {
 				logSkip("repo " + repo.Name)
 				return nil
 			}
@@ -134,7 +136,7 @@ func applyRepo(client *ghclient.Client, cfg *config.Config, owner string, isOrg 
 			if opts.DryRun {
 				logDryRun("update", "repo "+repo.Name)
 			} else {
-				if opts.Interactive && !confirm(fmt.Sprintf("Update repo %s settings?", repo.Name)) {
+				if opts.Interactive && !confirm(fmt.Sprintf("Update repo %s settings?", repo.Name), opts) {
 					logSkip("repo " + repo.Name)
 				} else {
 					_, err := client.UpdateRepo(owner, repo.Name, &gh.Repository{
@@ -420,7 +422,7 @@ func applyTeam(client *ghclient.Client, org string, team config.Team, opts Optio
 		if opts.DryRun {
 			logDryRun("create", "team "+team.Name)
 		} else {
-			if opts.Interactive && !confirm(fmt.Sprintf("Create team %s?", team.Name)) {
+			if opts.Interactive && !confirm(fmt.Sprintf("Create team %s?", team.Name), opts) {
 				logSkip("team " + team.Name)
 				return nil
 			}
@@ -490,17 +492,26 @@ func applySecret(client *ghclient.Client, owner, repo string, isOrg bool, secret
 		return nil
 	}
 
-	var value string
-	err := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title(fmt.Sprintf("Enter value for secret %s", secret.Name)).
-				EchoMode(huh.EchoModePassword).
-				Value(&value),
-		),
-	).WithTheme(huh.ThemeCatppuccin()).Run()
-	if err != nil {
-		return err
+	// Check for env var GH_SETUP_SECRET_<NAME> (uppercased)
+	envKey := "GH_SETUP_SECRET_" + strings.ToUpper(secret.Name)
+	value := os.Getenv(envKey)
+
+	if value == "" {
+		if opts.NonInteractive {
+			return fmt.Errorf("secret %s: value must be provided via env var %s in non-interactive mode", secret.Name, envKey)
+		}
+
+		err := huh.NewForm(
+			huh.NewGroup(
+				huh.NewInput().
+					Title(fmt.Sprintf("Enter value for secret %s", secret.Name)).
+					EchoMode(huh.EchoModePassword).
+					Value(&value),
+			),
+		).WithTheme(huh.ThemeCatppuccin()).Run()
+		if err != nil {
+			return err
+		}
 	}
 
 	if secret.Scope == "org" && isOrg {
@@ -516,7 +527,10 @@ func applySecret(client *ghclient.Client, owner, repo string, isOrg bool, secret
 	return nil
 }
 
-func confirm(msg string) bool {
+func confirm(msg string, opts Options) bool {
+	if opts.NonInteractive {
+		return true
+	}
 	var yes bool
 	err := huh.NewForm(
 		huh.NewGroup(

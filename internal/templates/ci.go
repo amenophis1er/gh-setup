@@ -13,5 +13,5 @@ func CIWorkflow(name string) ([]byte, error) {
 
 // CITemplateNames returns the list of available CI template names.
 func CITemplateNames() []string {
-	return []string{"go", "rust", "node", "python"}
+	return []string{"go", "rust", "node", "python", "docker", "terraform", "java", "ruby"}
 }

@@ -16,6 +16,15 @@ func (c *Client) DisableVulnerabilityAlerts(owner, repo string) error {
 	return err
 }
 
+// GetVulnerabilityAlerts checks if Dependabot vulnerability alerts are enabled.
+func (c *Client) GetVulnerabilityAlerts(owner, repo string) (bool, error) {
+	enabled, _, err := c.Repositories.GetVulnerabilityAlerts(c.ctx, owner, repo)
+	if err != nil {
+		return false, err
+	}
+	return enabled, nil
+}
+
 // UpdateSecurityAndAnalysis updates security features (secret scanning, etc.) on a repo.
 func (c *Client) UpdateSecurityAndAnalysis(owner, repoName string, secretScanning, codeScanningEnabled bool) error {
 	securityAndAnalysis := &gh.SecurityAndAnalysis{}

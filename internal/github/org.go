@@ -18,6 +18,15 @@ func (c *Client) GetOrg(name string) (*gh.Organization, error) {
 	return org, nil
 }
 
+// IsOrganization checks if the given name is an organization.
+func (c *Client) IsOrganization(name string) (bool, error) {
+	org, err := c.GetOrg(name)
+	if err != nil {
+		return false, err
+	}
+	return org != nil, nil
+}
+
 // CreateOrg is a placeholder — GitHub API doesn't support org creation via REST.
 // Organizations must be created manually via github.com.
 func (c *Client) CreateOrg(_ string) error {
