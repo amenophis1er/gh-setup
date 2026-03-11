@@ -24,6 +24,23 @@ Installable as a standalone binary or as a [`gh` CLI](https://cli.github.com/) e
 - **Secrets management** — org and repo-level secrets (values prompted securely at apply time)
 - **Config validation** — catches errors before any API calls are made
 
+## Why not Terraform?
+
+| | gh-setup | Terraform + GitHub provider |
+|---|---|---|
+| **Config language** | YAML | HCL |
+| **State management** | None — compares directly against the API | Remote state file required |
+| **Setup** | Single binary, `gh auth login` | Terraform + provider + backend config |
+| **Drift detection** | `gh setup diff` | `terraform plan` |
+| **Learning curve** | Minimal — one YAML file | HCL syntax, state concepts, module system |
+| **Import existing repos** | `gh setup import` generates full YAML | `terraform import` per-resource, write HCL by hand |
+| **Interactive mode** | Wizard, per-action confirm prompts | No |
+| **CI workflows** | Embedded templates (8 languages) | Write separately |
+| **Governance files** | Built-in (CONTRIBUTING, CoC, SECURITY, CODEOWNERS) | Write separately |
+| **Scope** | GitHub only | Multi-cloud |
+
+Terraform is the right choice if you manage GitHub alongside AWS/GCP/Azure infrastructure. gh-setup is for teams that just want their GitHub settings in version control without the overhead of a full IaC stack.
+
 ## Installation
 
 ### As a `gh` CLI extension (recommended)
