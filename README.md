@@ -1,6 +1,7 @@
 # gh-setup
 
 [![CI](https://github.com/amenophis1er/gh-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/amenophis1er/gh-setup/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/amenophis1er/gh-setup/graph/badge.svg)](https://codecov.io/gh/amenophis1er/gh-setup)
 [![Release](https://img.shields.io/github/v/release/amenophis1er/gh-setup)](https://github.com/amenophis1er/gh-setup/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
