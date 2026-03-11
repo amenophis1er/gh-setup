@@ -10,6 +10,7 @@ import (
 
 	"github.com/amenophis1er/gh-setup/internal/config"
 	ghclient "github.com/amenophis1er/gh-setup/internal/github"
+	"github.com/amenophis1er/gh-setup/internal/templates"
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/sync/errgroup"
 )
@@ -239,6 +240,27 @@ func diffRepo(client ghclient.GitHubClient, cfg *config.Config, owner string, re
 	}
 	diffProtection(client, cfg, owner, repo, branch, resource, result)
 
+	// CI workflow
+	diffCIWorkflow(client, owner, repo.Name, repo.CI, resource, result)
+
+	// Dependabot config
+	diffDependabot(client, owner, repo.Name, repo.CI, cfg.Security.Dependabot, resource, result)
+
+	// CODEOWNERS
+	diffCodeowners(client, owner, repo.Name, cfg.Governance.Codeowners, resource, result)
+
+	// Security flags
+	var secretScanStatus, advancedSecStatus string
+	if sa := existing.GetSecurityAndAnalysis(); sa != nil {
+		if sa.SecretScanning != nil {
+			secretScanStatus = sa.SecretScanning.GetStatus()
+		}
+		if sa.AdvancedSecurity != nil {
+			advancedSecStatus = sa.AdvancedSecurity.GetStatus()
+		}
+	}
+	diffSecurityFlags(client, owner, repo.Name, cfg.Security, secretScanStatus, advancedSecStatus, resource, result)
+
 	if !changes && len(result.Changes) == changesBefore {
 		result.Changes = append(result.Changes, Change{
 			Resource: resource, Type: resType, Action: "ok", New: "\u2713 up to date",
@@ -401,6 +423,147 @@ func diffBoolPtr(actual bool, desired *bool, field, resource, resType string, re
 		result.Changes = append(result.Changes, Change{
 			Resource: resource, Type: resType, Field: field, Action: "change",
 			Old: fmt.Sprintf("%v", actual), New: fmt.Sprintf("%v", *desired),
+		})
+	}
+}
+
+func diffCIWorkflow(client ghclient.GitHubClient, owner, repoName, ciName, resource string, result *DiffResult) {
+	if ciName == "" {
+		return
+	}
+
+	desired, err := templates.CIWorkflow(ciName)
+	if err != nil {
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: "repo", Field: "ci error", Action: "error",
+			New: fmt.Sprintf("%v", err),
+		})
+		return
+	}
+
+	actual, _, err := client.GetFileContent(owner, repoName, ".github/workflows/ci.yml")
+	if err != nil {
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: "repo", Field: "ci error", Action: "error",
+			New: fmt.Sprintf("%v", err),
+		})
+		return
+	}
+
+	if actual == "" {
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: "repo", Field: "ci_workflow", Action: "add",
+			New: fmt.Sprintf("%s (will be created)", ciName),
+		})
+		return
+	}
+
+	if strings.TrimSpace(actual) != strings.TrimSpace(string(desired)) {
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: "repo", Field: "ci_workflow", Action: "change",
+			Old: "current", New: fmt.Sprintf("%s template", ciName),
+		})
+	}
+}
+
+func diffDependabot(client ghclient.GitHubClient, owner, repoName, ciName string, enabled bool, resource string, result *DiffResult) {
+	if !enabled {
+		return
+	}
+
+	ecosystem := templates.CIToEcosystem(ciName)
+	desired := templates.DependabotConfig(ecosystem)
+
+	actual, _, err := client.GetFileContent(owner, repoName, ".github/dependabot.yml")
+	if err != nil {
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: "repo", Field: "dependabot error", Action: "error",
+			New: fmt.Sprintf("%v", err),
+		})
+		return
+	}
+
+	if actual == "" {
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: "repo", Field: "dependabot.yml", Action: "add",
+			New: "not present (will be created)",
+		})
+		return
+	}
+
+	if strings.TrimSpace(actual) != strings.TrimSpace(desired) {
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: "repo", Field: "dependabot.yml", Action: "change",
+			Old: "current", New: "desired config",
+		})
+	}
+}
+
+func diffCodeowners(client ghclient.GitHubClient, owner, repoName, desired, resource string, result *DiffResult) {
+	if desired == "" {
+		return
+	}
+
+	actual, _, err := client.GetFileContent(owner, repoName, ".github/CODEOWNERS")
+	if err != nil {
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: "repo", Field: "codeowners error", Action: "error",
+			New: fmt.Sprintf("%v", err),
+		})
+		return
+	}
+
+	if actual == "" {
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: "repo", Field: "CODEOWNERS", Action: "add",
+			New: strings.TrimSpace(desired),
+		})
+		return
+	}
+
+	if strings.TrimSpace(actual) != strings.TrimSpace(desired) {
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: "repo", Field: "CODEOWNERS", Action: "change",
+			Old: strings.TrimSpace(actual), New: strings.TrimSpace(desired),
+		})
+	}
+}
+
+func diffSecurityFlags(client ghclient.GitHubClient, owner, repoName string, sec config.Security, secretScanStatus, advancedSecStatus string, resource string, result *DiffResult) {
+	if sec.Dependabot {
+		alerts, err := client.GetVulnerabilityAlerts(owner, repoName)
+		if err != nil {
+			result.Changes = append(result.Changes, Change{
+				Resource: resource, Type: "repo", Field: "dependabot error", Action: "error",
+				New: fmt.Sprintf("%v", err),
+			})
+		} else if !alerts {
+			result.Changes = append(result.Changes, Change{
+				Resource: resource, Type: "repo", Field: "dependabot_alerts", Action: "change",
+				Old: "disabled", New: "enabled",
+			})
+		}
+	}
+
+	if sec.SecretScanning && secretScanStatus != "enabled" {
+		old := secretScanStatus
+		if old == "" {
+			old = "disabled"
+		}
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: "repo", Field: "secret_scanning", Action: "change",
+			Old: old, New: "enabled",
+		})
+	}
+
+	if sec.CodeScanning && advancedSecStatus != "enabled" {
+		old := advancedSecStatus
+		if old == "" {
+			old = "disabled"
+		}
+		result.Changes = append(result.Changes, Change{
+			Resource: resource, Type: "repo", Field: "code_scanning", Action: "change",
+			Old: old, New: "enabled",
 		})
 	}
 }

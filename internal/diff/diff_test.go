@@ -5,6 +5,7 @@ import (
 
 	"github.com/amenophis1er/gh-setup/internal/config"
 	"github.com/amenophis1er/gh-setup/internal/github/mock"
+	"github.com/amenophis1er/gh-setup/internal/templates"
 	gh "github.com/google/go-github/v68/github"
 )
 
@@ -368,5 +369,417 @@ func TestDiffDescriptionChange(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected description change, but not found")
+	}
+}
+
+func TestDiffCIWorkflowMissing(t *testing.T) {
+	m := &mock.Client{
+		GetRepoFn: func(owner, name string) (*gh.Repository, error) {
+			return &gh.Repository{
+				Name:                gh.Ptr("my-repo"),
+				Private:             gh.Ptr(false),
+				DeleteBranchOnMerge: gh.Ptr(false),
+			}, nil
+		},
+		ListLabelsFn: func(owner, repo string) ([]*gh.Label, error) {
+			return nil, nil
+		},
+		GetBranchProtectionFn: func(owner, repo, branch string) (*gh.Protection, error) {
+			return nil, nil
+		},
+		GetFileContentFn: func(owner, repo, path string) (string, *string, error) {
+			return "", nil, nil // file doesn't exist
+		},
+	}
+
+	cfg := &config.Config{
+		Account: config.Account{Type: "individual", Name: "testuser"},
+		Defaults: config.Defaults{
+			Visibility:       "public",
+			DefaultBranch:    "main",
+			BranchProtection: config.BranchProtection{Preset: "none"},
+		},
+		Repos: []config.Repo{
+			{Name: "my-repo", CI: "go"},
+		},
+	}
+
+	var result DiffResult
+	diffRepo(m, cfg, "testuser", cfg.Repos[0], &result)
+
+	found := false
+	for _, c := range result.Changes {
+		if c.Field == "ci_workflow" && c.Action == "add" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected ci_workflow add, but not found")
+	}
+}
+
+func TestDiffCIWorkflowUpToDate(t *testing.T) {
+	goTemplate, _ := templates.CIWorkflow("go")
+
+	m := &mock.Client{
+		GetRepoFn: func(owner, name string) (*gh.Repository, error) {
+			return &gh.Repository{
+				Name:                gh.Ptr("my-repo"),
+				Private:             gh.Ptr(false),
+				DeleteBranchOnMerge: gh.Ptr(false),
+			}, nil
+		},
+		ListLabelsFn: func(owner, repo string) ([]*gh.Label, error) {
+			return nil, nil
+		},
+		GetBranchProtectionFn: func(owner, repo, branch string) (*gh.Protection, error) {
+			return nil, nil
+		},
+		GetFileContentFn: func(owner, repo, path string) (string, *string, error) {
+			if path == ".github/workflows/ci.yml" {
+				return string(goTemplate), gh.Ptr("abc123"), nil
+			}
+			return "", nil, nil
+		},
+	}
+
+	cfg := &config.Config{
+		Account: config.Account{Type: "individual", Name: "testuser"},
+		Defaults: config.Defaults{
+			Visibility:       "public",
+			DefaultBranch:    "main",
+			BranchProtection: config.BranchProtection{Preset: "none"},
+		},
+		Repos: []config.Repo{
+			{Name: "my-repo", CI: "go"},
+		},
+	}
+
+	var result DiffResult
+	diffRepo(m, cfg, "testuser", cfg.Repos[0], &result)
+
+	for _, c := range result.Changes {
+		if c.Field == "ci_workflow" {
+			t.Errorf("expected no ci_workflow change, got action=%s", c.Action)
+		}
+	}
+}
+
+func TestDiffCIWorkflowDrift(t *testing.T) {
+	m := &mock.Client{
+		GetRepoFn: func(owner, name string) (*gh.Repository, error) {
+			return &gh.Repository{
+				Name:                gh.Ptr("my-repo"),
+				Private:             gh.Ptr(false),
+				DeleteBranchOnMerge: gh.Ptr(false),
+			}, nil
+		},
+		ListLabelsFn: func(owner, repo string) ([]*gh.Label, error) {
+			return nil, nil
+		},
+		GetBranchProtectionFn: func(owner, repo, branch string) (*gh.Protection, error) {
+			return nil, nil
+		},
+		GetFileContentFn: func(owner, repo, path string) (string, *string, error) {
+			if path == ".github/workflows/ci.yml" {
+				return "name: Old CI\non: push\n", gh.Ptr("abc123"), nil
+			}
+			return "", nil, nil
+		},
+	}
+
+	cfg := &config.Config{
+		Account: config.Account{Type: "individual", Name: "testuser"},
+		Defaults: config.Defaults{
+			Visibility:       "public",
+			DefaultBranch:    "main",
+			BranchProtection: config.BranchProtection{Preset: "none"},
+		},
+		Repos: []config.Repo{
+			{Name: "my-repo", CI: "go"},
+		},
+	}
+
+	var result DiffResult
+	diffRepo(m, cfg, "testuser", cfg.Repos[0], &result)
+
+	found := false
+	for _, c := range result.Changes {
+		if c.Field == "ci_workflow" && c.Action == "change" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected ci_workflow change, but not found")
+	}
+}
+
+func TestDiffDependabotMissing(t *testing.T) {
+	m := &mock.Client{
+		GetRepoFn: func(owner, name string) (*gh.Repository, error) {
+			return &gh.Repository{
+				Name:                gh.Ptr("my-repo"),
+				Private:             gh.Ptr(false),
+				DeleteBranchOnMerge: gh.Ptr(false),
+			}, nil
+		},
+		ListLabelsFn: func(owner, repo string) ([]*gh.Label, error) {
+			return nil, nil
+		},
+		GetBranchProtectionFn: func(owner, repo, branch string) (*gh.Protection, error) {
+			return nil, nil
+		},
+		GetFileContentFn: func(owner, repo, path string) (string, *string, error) {
+			return "", nil, nil
+		},
+		GetVulnerabilityAlertsFn: func(owner, repo string) (bool, error) {
+			return true, nil // already enabled
+		},
+	}
+
+	cfg := &config.Config{
+		Account: config.Account{Type: "individual", Name: "testuser"},
+		Defaults: config.Defaults{
+			Visibility:       "public",
+			DefaultBranch:    "main",
+			BranchProtection: config.BranchProtection{Preset: "none"},
+		},
+		Security: config.Security{Dependabot: true},
+		Repos: []config.Repo{
+			{Name: "my-repo", CI: "go"},
+		},
+	}
+
+	var result DiffResult
+	diffRepo(m, cfg, "testuser", cfg.Repos[0], &result)
+
+	found := false
+	for _, c := range result.Changes {
+		if c.Field == "dependabot.yml" && c.Action == "add" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected dependabot.yml add, but not found")
+	}
+}
+
+func TestDiffCodeownersMissing(t *testing.T) {
+	m := &mock.Client{
+		GetRepoFn: func(owner, name string) (*gh.Repository, error) {
+			return &gh.Repository{
+				Name:                gh.Ptr("my-repo"),
+				Private:             gh.Ptr(false),
+				DeleteBranchOnMerge: gh.Ptr(false),
+			}, nil
+		},
+		ListLabelsFn: func(owner, repo string) ([]*gh.Label, error) {
+			return nil, nil
+		},
+		GetBranchProtectionFn: func(owner, repo, branch string) (*gh.Protection, error) {
+			return nil, nil
+		},
+		GetFileContentFn: func(owner, repo, path string) (string, *string, error) {
+			return "", nil, nil
+		},
+	}
+
+	cfg := &config.Config{
+		Account: config.Account{Type: "individual", Name: "testuser"},
+		Defaults: config.Defaults{
+			Visibility:       "public",
+			DefaultBranch:    "main",
+			BranchProtection: config.BranchProtection{Preset: "none"},
+		},
+		Governance: config.Governance{Codeowners: "* @myorg/core"},
+		Repos: []config.Repo{
+			{Name: "my-repo"},
+		},
+	}
+
+	var result DiffResult
+	diffRepo(m, cfg, "testuser", cfg.Repos[0], &result)
+
+	found := false
+	for _, c := range result.Changes {
+		if c.Field == "CODEOWNERS" && c.Action == "add" {
+			found = true
+			if c.New != "* @myorg/core" {
+				t.Errorf("expected CODEOWNERS content '* @myorg/core', got %q", c.New)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected CODEOWNERS add, but not found")
+	}
+}
+
+func TestDiffCodeownersDrift(t *testing.T) {
+	m := &mock.Client{
+		GetRepoFn: func(owner, name string) (*gh.Repository, error) {
+			return &gh.Repository{
+				Name:                gh.Ptr("my-repo"),
+				Private:             gh.Ptr(false),
+				DeleteBranchOnMerge: gh.Ptr(false),
+			}, nil
+		},
+		ListLabelsFn: func(owner, repo string) ([]*gh.Label, error) {
+			return nil, nil
+		},
+		GetBranchProtectionFn: func(owner, repo, branch string) (*gh.Protection, error) {
+			return nil, nil
+		},
+		GetFileContentFn: func(owner, repo, path string) (string, *string, error) {
+			if path == ".github/CODEOWNERS" {
+				return "* @old-team\n", gh.Ptr("sha1"), nil
+			}
+			return "", nil, nil
+		},
+	}
+
+	cfg := &config.Config{
+		Account: config.Account{Type: "individual", Name: "testuser"},
+		Defaults: config.Defaults{
+			Visibility:       "public",
+			DefaultBranch:    "main",
+			BranchProtection: config.BranchProtection{Preset: "none"},
+		},
+		Governance: config.Governance{Codeowners: "* @myorg/core"},
+		Repos: []config.Repo{
+			{Name: "my-repo"},
+		},
+	}
+
+	var result DiffResult
+	diffRepo(m, cfg, "testuser", cfg.Repos[0], &result)
+
+	found := false
+	for _, c := range result.Changes {
+		if c.Field == "CODEOWNERS" && c.Action == "change" {
+			found = true
+			if c.Old != "* @old-team" || c.New != "* @myorg/core" {
+				t.Errorf("expected CODEOWNERS change from '* @old-team' to '* @myorg/core', got %q→%q", c.Old, c.New)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected CODEOWNERS change, but not found")
+	}
+}
+
+func TestDiffSecurityFlagsDependabotDisabled(t *testing.T) {
+	m := &mock.Client{
+		GetRepoFn: func(owner, name string) (*gh.Repository, error) {
+			return &gh.Repository{
+				Name:                gh.Ptr("my-repo"),
+				Private:             gh.Ptr(false),
+				DeleteBranchOnMerge: gh.Ptr(false),
+			}, nil
+		},
+		ListLabelsFn: func(owner, repo string) ([]*gh.Label, error) {
+			return nil, nil
+		},
+		GetBranchProtectionFn: func(owner, repo, branch string) (*gh.Protection, error) {
+			return nil, nil
+		},
+		GetFileContentFn: func(owner, repo, path string) (string, *string, error) {
+			return "", nil, nil
+		},
+		GetVulnerabilityAlertsFn: func(owner, repo string) (bool, error) {
+			return false, nil // disabled
+		},
+	}
+
+	cfg := &config.Config{
+		Account: config.Account{Type: "individual", Name: "testuser"},
+		Defaults: config.Defaults{
+			Visibility:       "public",
+			DefaultBranch:    "main",
+			BranchProtection: config.BranchProtection{Preset: "none"},
+		},
+		Security: config.Security{
+			Dependabot:     true,
+			SecretScanning: true,
+		},
+		Repos: []config.Repo{
+			{Name: "my-repo"},
+		},
+	}
+
+	var result DiffResult
+	diffRepo(m, cfg, "testuser", cfg.Repos[0], &result)
+
+	fields := map[string]bool{
+		"dependabot_alerts": false,
+		"secret_scanning":   false,
+	}
+	for _, c := range result.Changes {
+		if _, ok := fields[c.Field]; ok && c.Action == "change" {
+			fields[c.Field] = true
+		}
+	}
+	for field, found := range fields {
+		if !found {
+			t.Errorf("expected change for %s, but not found", field)
+		}
+	}
+}
+
+func TestDiffSecurityFlagsAlreadyEnabled(t *testing.T) {
+	m := &mock.Client{
+		GetRepoFn: func(owner, name string) (*gh.Repository, error) {
+			return &gh.Repository{
+				Name:                gh.Ptr("my-repo"),
+				Private:             gh.Ptr(false),
+				DeleteBranchOnMerge: gh.Ptr(false),
+				SecurityAndAnalysis: &gh.SecurityAndAnalysis{
+					SecretScanning:  &gh.SecretScanning{Status: gh.Ptr("enabled")},
+					AdvancedSecurity: &gh.AdvancedSecurity{Status: gh.Ptr("enabled")},
+				},
+			}, nil
+		},
+		ListLabelsFn: func(owner, repo string) ([]*gh.Label, error) {
+			return nil, nil
+		},
+		GetBranchProtectionFn: func(owner, repo, branch string) (*gh.Protection, error) {
+			return nil, nil
+		},
+		GetFileContentFn: func(owner, repo, path string) (string, *string, error) {
+			return "", nil, nil
+		},
+		GetVulnerabilityAlertsFn: func(owner, repo string) (bool, error) {
+			return true, nil
+		},
+	}
+
+	cfg := &config.Config{
+		Account: config.Account{Type: "individual", Name: "testuser"},
+		Defaults: config.Defaults{
+			Visibility:       "public",
+			DefaultBranch:    "main",
+			BranchProtection: config.BranchProtection{Preset: "none"},
+		},
+		Security: config.Security{
+			Dependabot:     true,
+			SecretScanning: true,
+			CodeScanning:   true,
+		},
+		Repos: []config.Repo{
+			{Name: "my-repo"},
+		},
+	}
+
+	var result DiffResult
+	diffRepo(m, cfg, "testuser", cfg.Repos[0], &result)
+
+	securityFields := map[string]bool{
+		"dependabot_alerts": true,
+		"secret_scanning":   true,
+		"code_scanning":     true,
+	}
+	for _, c := range result.Changes {
+		if securityFields[c.Field] {
+			t.Errorf("unexpected change for %s when already enabled", c.Field)
+		}
 	}
 }
