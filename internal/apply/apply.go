@@ -33,6 +33,7 @@ type Options struct {
 
 // RunWith applies the config to GitHub using the provided client.
 func RunWith(client ghclient.GitHubClient, cfg *config.Config, opts Options) error {
+	resetStats()
 	owner := cfg.Account.Name
 	isOrg := cfg.Account.Type == "organization"
 
@@ -92,8 +93,9 @@ func RunWith(client ghclient.GitHubClient, cfg *config.Config, opts Options) err
 		}
 	}
 
+	printSummary(opts.DryRun)
+
 	if len(errs) > 0 {
-		fmt.Println()
 		return fmt.Errorf("%d error(s) during apply:\n  - %s", len(errs), strings.Join(errs, "\n  - "))
 	}
 
