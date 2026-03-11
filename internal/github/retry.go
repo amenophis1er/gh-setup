@@ -39,7 +39,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if err != nil {
 			return nil, err
 		}
-		req.Body.Close()
+		_ = req.Body.Close()
 	}
 
 	for attempt := 0; attempt <= t.maxRetries; attempt++ {
@@ -74,8 +74,8 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		log.Debug("Retrying request", "status", resp.StatusCode, "attempt", attempt+1, "wait", wait)
 
 		// Drain and close the body so the connection can be reused.
-		io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
 
 		time.Sleep(wait)
 	}

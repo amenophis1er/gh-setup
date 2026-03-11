@@ -350,6 +350,243 @@ func TestApplyRepoSettingsMergeAndFeatures(t *testing.T) {
 	}
 }
 
+func TestApplyLabelsDeleteUnwanted(t *testing.T) {
+	var deleted []string
+	var mu sync.Mutex
+
+	m := &mock.Client{
+		GetRepoFn: func(owner, name string) (*gh.Repository, error) {
+			return &gh.Repository{
+				Name:                gh.Ptr("my-repo"),
+				Private:             gh.Ptr(false),
+				DeleteBranchOnMerge: gh.Ptr(false),
+			}, nil
+		},
+		ListLabelsFn: func(owner, repo string) ([]*gh.Label, error) {
+			return []*gh.Label{
+				{Name: gh.Ptr("bug"), Color: gh.Ptr("d73a4a"), Description: gh.Ptr("Something broken")},
+				{Name: gh.Ptr("wontfix"), Color: gh.Ptr("ffffff"), Description: gh.Ptr("Not fixing")},
+				{Name: gh.Ptr("duplicate"), Color: gh.Ptr("cfd3d7"), Description: gh.Ptr("Already exists")},
+			}, nil
+		},
+		CreateLabelFn: func(owner, repo string, label config.Label) error {
+			return nil
+		},
+		UpdateLabelFn: func(owner, repo, currentName string, label config.Label) error {
+			return nil
+		},
+		DeleteLabelFn: func(owner, repo, name string) error {
+			mu.Lock()
+			deleted = append(deleted, name)
+			mu.Unlock()
+			return nil
+		},
+		GetFileContentFn: func(owner, repo, path string) (string, *string, error) {
+			return "", nil, nil
+		},
+	}
+
+	cfg := &config.Config{
+		Account: config.Account{Type: "individual", Name: "testuser"},
+		Defaults: config.Defaults{
+			Visibility:       "public",
+			DefaultBranch:    "main",
+			BranchProtection: config.BranchProtection{Preset: "none"},
+		},
+		Labels: config.Labels{
+			ReplaceDefaults: true,
+			Items: []config.Label{
+				{Name: "bug", Color: "d73a4a", Description: "Something broken"},
+			},
+		},
+		Repos: []config.Repo{{Name: "my-repo"}},
+	}
+
+	err := RunWith(m, cfg, Options{Concurrency: 1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(deleted) != 2 {
+		t.Fatalf("expected 2 labels deleted, got %d: %v", len(deleted), deleted)
+	}
+	for _, d := range deleted {
+		if d != "wontfix" && d != "duplicate" {
+			t.Errorf("unexpected label deleted: %s", d)
+		}
+	}
+}
+
+func TestApplyTeamRemovesMember(t *testing.T) {
+	var removed []string
+	var mu sync.Mutex
+
+	m := &mock.Client{
+		GetTeamFn: func(org, slug string) (*gh.Team, error) {
+			return &gh.Team{Slug: gh.Ptr("backend")}, nil
+		},
+		UpdateTeamFn: func(org, slug, name, description, permission string) (*gh.Team, error) {
+			return &gh.Team{Slug: gh.Ptr("backend")}, nil
+		},
+		ListTeamMembersFn: func(org, slug string) ([]*gh.User, error) {
+			return []*gh.User{
+				{Login: gh.Ptr("alice")},
+				{Login: gh.Ptr("bob")},   // not in desired → should be removed
+				{Login: gh.Ptr("carol")}, // not in desired → should be removed
+			}, nil
+		},
+		AddTeamMemberFn: func(org, slug, username string) error {
+			return nil
+		},
+		RemoveTeamMemberFn: func(org, slug, username string) error {
+			mu.Lock()
+			removed = append(removed, username)
+			mu.Unlock()
+			return nil
+		},
+	}
+
+	cfg := &config.Config{
+		Account: config.Account{Type: "organization", Name: "myorg"},
+		Defaults: config.Defaults{
+			Visibility:       "private",
+			DefaultBranch:    "main",
+			BranchProtection: config.BranchProtection{Preset: "none"},
+		},
+		Teams: []config.Team{
+			{Name: "backend", Description: "Backend devs", Permission: "write", Members: []string{"alice"}},
+		},
+	}
+
+	err := RunWith(m, cfg, Options{Concurrency: 1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(removed) != 2 {
+		t.Fatalf("expected 2 members removed, got %d: %v", len(removed), removed)
+	}
+	for _, r := range removed {
+		if r != "bob" && r != "carol" {
+			t.Errorf("unexpected member removed: %s", r)
+		}
+	}
+}
+
+func TestApplyGovernanceFiles(t *testing.T) {
+	var filesWritten []string
+	var mu sync.Mutex
+
+	m := &mock.Client{
+		GetRepoFn: func(owner, name string) (*gh.Repository, error) {
+			return &gh.Repository{
+				Name:                gh.Ptr("my-repo"),
+				Private:             gh.Ptr(false),
+				DeleteBranchOnMerge: gh.Ptr(false),
+			}, nil
+		},
+		ListLabelsFn: func(owner, repo string) ([]*gh.Label, error) {
+			return nil, nil
+		},
+		GetFileContentFn: func(owner, repo, path string) (string, *string, error) {
+			return "", nil, nil // file doesn't exist
+		},
+		CreateOrUpdateFileFn: func(owner, repo, path, message string, content []byte, sha *string) error {
+			mu.Lock()
+			filesWritten = append(filesWritten, path)
+			mu.Unlock()
+			return nil
+		},
+	}
+
+	cfg := &config.Config{
+		Account: config.Account{Type: "individual", Name: "testuser"},
+		Defaults: config.Defaults{
+			Visibility:       "public",
+			DefaultBranch:    "main",
+			BranchProtection: config.BranchProtection{Preset: "none"},
+		},
+		Governance: config.Governance{
+			Contributing:   true,
+			CodeOfConduct:  true,
+			SecurityPolicy: true,
+			Codeowners:     "* @testuser",
+		},
+		Repos: []config.Repo{{Name: "my-repo"}},
+	}
+
+	err := RunWith(m, cfg, Options{Concurrency: 1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(filesWritten) < 4 {
+		t.Fatalf("expected at least 4 governance files, got %d: %v", len(filesWritten), filesWritten)
+	}
+	expected := map[string]bool{
+		"CONTRIBUTING.md":    false,
+		"CODE_OF_CONDUCT.md": false,
+		"SECURITY.md":        false,
+		".github/CODEOWNERS": false,
+	}
+	for _, f := range filesWritten {
+		if _, ok := expected[f]; ok {
+			expected[f] = true
+		}
+	}
+	for f, found := range expected {
+		if !found {
+			t.Errorf("expected governance file %s to be written", f)
+		}
+	}
+}
+
+func TestApplyCIWorkflow(t *testing.T) {
+	var writtenPath string
+	var writtenContent []byte
+
+	m := &mock.Client{
+		GetRepoFn: func(owner, name string) (*gh.Repository, error) {
+			return &gh.Repository{
+				Name:                gh.Ptr("my-repo"),
+				Private:             gh.Ptr(false),
+				DeleteBranchOnMerge: gh.Ptr(false),
+			}, nil
+		},
+		ListLabelsFn: func(owner, repo string) ([]*gh.Label, error) {
+			return nil, nil
+		},
+		GetFileContentFn: func(owner, repo, path string) (string, *string, error) {
+			return "", nil, nil
+		},
+		CreateOrUpdateFileFn: func(owner, repo, path, message string, content []byte, sha *string) error {
+			if path == ".github/workflows/ci.yml" {
+				writtenPath = path
+				writtenContent = content
+			}
+			return nil
+		},
+	}
+
+	cfg := &config.Config{
+		Account: config.Account{Type: "individual", Name: "testuser"},
+		Defaults: config.Defaults{
+			Visibility:       "public",
+			DefaultBranch:    "main",
+			BranchProtection: config.BranchProtection{Preset: "none"},
+		},
+		Repos: []config.Repo{{Name: "my-repo", CI: "go"}},
+	}
+
+	err := RunWith(m, cfg, Options{Concurrency: 1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if writtenPath != ".github/workflows/ci.yml" {
+		t.Errorf("expected CI workflow to be written, got path %q", writtenPath)
+	}
+	if len(writtenContent) == 0 {
+		t.Error("expected non-empty CI workflow content")
+	}
+}
+
 func TestApplyOrgTeamCreate(t *testing.T) {
 	var teamCreated bool
 	var memberAdded string

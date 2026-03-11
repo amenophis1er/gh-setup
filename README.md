@@ -1,5 +1,9 @@
 # gh-setup
 
+[![CI](https://github.com/amenophis1er/gh-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/amenophis1er/gh-setup/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/amenophis1er/gh-setup)](https://github.com/amenophis1er/gh-setup/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 **Stop clicking through GitHub settings tabs.** Define your repos, branch rules, labels, teams, CI, and security in one YAML file — then apply it in seconds. Unlike Terraform (heavy, HCL, state files) or shell scripts (fragile, no drift detection), gh-setup is purpose-built for GitHub: zero state management, idempotent, and interactive when you want it.
 
 Installable as a standalone binary or as a [`gh` CLI](https://cli.github.com/) extension.
@@ -99,10 +103,14 @@ The token needs the following scopes:
 Reverse-engineer an existing GitHub account or repo into a config file.
 
 ```bash
+gh setup import                          # auto-detect from git remote
 gh setup import myorg                    # import entire org
 gh setup import myuser --repo my-repo    # import a single repo
+gh setup import --stdout -o json         # auto-detect, JSON to stdout
 gh setup import myorg -c existing.yaml   # write to a custom file
 ```
+
+When run inside a git repository with a GitHub remote, the account and repo are inferred automatically — no arguments needed.
 
 This fetches repos, labels, branch protection, teams, governance files, and security settings from the live GitHub state and generates a complete `gh-setup.yaml`. Great for adopting gh-setup on existing projects.
 
@@ -377,8 +385,10 @@ gh-setup/
 ├── internal/
 │   ├── config/config.go        # YAML structs, Load/Save, Validate, presets
 │   ├── wizard/wizard.go        # interactive wizard (charmbracelet/huh)
+│   ├── gitutil/remote.go       # auto-detect owner/repo from git remote
 │   ├── github/
 │   │   ├── client.go           # authenticated GitHub client
+│   │   ├── retry.go            # retry/backoff with rate-limit handling
 │   │   ├── org.go              # organization settings
 │   │   ├── repo.go             # repo CRUD, topics, file content
 │   │   ├── protection.go       # branch protection rules

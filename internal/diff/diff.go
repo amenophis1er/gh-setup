@@ -128,29 +128,29 @@ func RenderText(w io.Writer, result DiffResult) {
 	for _, c := range result.Changes {
 		if c.Resource != currentResource {
 			currentResource = c.Resource
-			fmt.Fprintln(w)
-			fmt.Fprintln(w, headerStyle.Render(fmt.Sprintf("  %s %s", c.Type, c.Resource)))
+			_, _ = fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w, headerStyle.Render(fmt.Sprintf("  %s %s", c.Type, c.Resource)))
 		}
 
 		switch c.Action {
 		case "add":
 			if c.Field != "" {
-				fmt.Fprintln(w, addStyle.Render(fmt.Sprintf("    %s: + %s", c.Field, c.New)))
+				_, _ = fmt.Fprintln(w, addStyle.Render(fmt.Sprintf("    %s: + %s", c.Field, c.New)))
 			} else {
-				fmt.Fprintln(w, addStyle.Render(fmt.Sprintf("    + %s", c.New)))
+				_, _ = fmt.Fprintln(w, addStyle.Render(fmt.Sprintf("    + %s", c.New)))
 			}
 		case "remove":
 			if c.Field != "" {
-				fmt.Fprintln(w, removeStyle.Render(fmt.Sprintf("    %s: - %s", c.Field, c.Old)))
+				_, _ = fmt.Fprintln(w, removeStyle.Render(fmt.Sprintf("    %s: - %s", c.Field, c.Old)))
 			} else {
-				fmt.Fprintln(w, removeStyle.Render(fmt.Sprintf("    - %s", c.Old)))
+				_, _ = fmt.Fprintln(w, removeStyle.Render(fmt.Sprintf("    - %s", c.Old)))
 			}
 		case "change":
-			fmt.Fprintln(w, changeStyle.Render(fmt.Sprintf("    %s:  %s → %s", c.Field, c.Old, c.New)))
+			_, _ = fmt.Fprintln(w, changeStyle.Render(fmt.Sprintf("    %s:  %s → %s", c.Field, c.Old, c.New)))
 		case "ok":
-			fmt.Fprintln(w, okStyle.Render(fmt.Sprintf("    %s", c.New)))
+			_, _ = fmt.Fprintln(w, okStyle.Render(fmt.Sprintf("    %s", c.New)))
 		case "error":
-			fmt.Fprintf(w, "    %s: %s\n", c.Field, c.New)
+			_, _ = fmt.Fprintf(w, "    %s: %s\n", c.Field, c.New)
 		}
 	}
 }

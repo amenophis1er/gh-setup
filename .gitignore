@@ -1,6 +1,7 @@
 # Binary
 gh-setup
 dist/
+coverage.out
 
 # OS
 .DS_Store
