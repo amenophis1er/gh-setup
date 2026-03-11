@@ -1,0 +1,63 @@
+# Small startup — private by default, a few services, one team.
+# Usage: gh setup apply -c examples/startup.yaml
+
+account:
+  type: organization
+  name: acme-inc
+
+defaults:
+  visibility: private
+  default_branch: main
+  delete_branch_on_merge: true
+  allow_squash_merge: true
+  allow_merge_commit: false
+  allow_rebase_merge: false
+  allow_auto_merge: true
+  has_wiki: false
+  branch_protection:
+    preset: standard            # require PR with 1 approval
+
+labels:
+  replace_defaults: true
+  items:
+    - { name: "bug",         color: "d73a4a",  description: "Something isn't working" }
+    - { name: "enhancement", color: "a2eeef",  description: "New feature or request" }
+    - { name: "breaking",    color: "e11d48",  description: "Breaking change" }
+    - { name: "docs",        color: "0075ca",  description: "Documentation" }
+    - { name: "ci",          color: "e4e669",  description: "CI/CD changes" }
+    - { name: "chore",       color: "cfd3d7",  description: "Maintenance" }
+    - { name: "priority",    color: "b60205",  description: "High priority" }
+
+repos:
+  - name: api
+    description: "REST API"
+    topics: ["api", "go"]
+    ci: go
+  - name: web
+    description: "Frontend app"
+    topics: ["frontend", "react"]
+    ci: node
+  - name: infra
+    description: "Infrastructure as code"
+    topics: ["terraform", "aws"]
+    ci: terraform
+
+teams:
+  - name: engineering
+    description: "Full engineering team"
+    permission: write
+    members: ["alice", "bob", "carol"]
+
+governance:
+  contributing: true
+  code_of_conduct: true
+  security_policy: true
+  codeowners: "* @acme-inc/engineering"
+
+security:
+  dependabot: true
+  secret_scanning: true
+
+secrets:
+  - name: DEPLOY_TOKEN
+    scope: org

@@ -57,6 +57,24 @@ cd gh-setup
 make build
 ```
 
+## Examples
+
+Ready-to-use configs for common setups — copy one and edit to fit your account:
+
+| Example | Description |
+|---------|-------------|
+| [minimal.yaml](examples/minimal.yaml) | One repo, no frills |
+| [personal.yaml](examples/personal.yaml) | Personal account with a few repos, labels, and security |
+| [startup.yaml](examples/startup.yaml) | Small org — private repos, one team, secrets |
+| [open-source-org.yaml](examples/open-source-org.yaml) | Public org — `repo_scope: all`, strict protection, governance, teams |
+
+```bash
+# Try one out
+cp examples/startup.yaml gh-setup.yaml
+# Edit account.name, repo names, team members, etc.
+gh setup apply --dry-run
+```
+
 ## Quick Start
 
 ```bash

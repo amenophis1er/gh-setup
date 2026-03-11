@@ -1,0 +1,16 @@
+# Minimal config — just one repo with defaults.
+# Usage: gh setup apply -c examples/minimal.yaml
+
+account:
+  type: individual
+  name: myuser
+
+defaults:
+  visibility: public
+  default_branch: main
+  branch_protection:
+    preset: none
+
+repos:
+  - name: my-project
+    description: "My project"
