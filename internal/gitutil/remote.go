@@ -31,3 +31,20 @@ func DetectRemote() (Remote, error) {
 
 	return Remote{Owner: m[1], Repo: m[2]}, nil
 }
+
+// IsInsideGitRepo returns true if the current directory is inside a git working tree.
+func IsInsideGitRepo() bool {
+	err := exec.Command("git", "rev-parse", "--is-inside-work-tree").Run()
+	return err == nil
+}
+
+// HasRemote returns true if the named remote exists.
+func HasRemote(name string) bool {
+	err := exec.Command("git", "remote", "get-url", name).Run()
+	return err == nil
+}
+
+// AddRemote adds a new git remote with the given name and URL.
+func AddRemote(name, url string) error {
+	return exec.Command("git", "remote", "add", name, url).Run()
+}

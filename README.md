@@ -108,6 +108,18 @@ gh setup apply --dry-run
 gh setup apply
 ```
 
+### Enrolling a local repo
+
+If you're in a local git repo with no remote, `apply` will automatically add the `origin` remote when it creates the GitHub repo (when the directory name matches the repo name in your config):
+
+```bash
+mkdir my-project && cd my-project
+git init
+gh setup init          # configure your repo
+gh setup apply         # creates the repo on GitHub + adds origin
+git push -u origin main
+```
+
 ## Authentication
 
 `gh-setup` resolves your GitHub token in this order:

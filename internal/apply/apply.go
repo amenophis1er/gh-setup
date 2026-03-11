@@ -6,8 +6,11 @@ import (
 	"strings"
 	"sync"
 
+	"path/filepath"
+
 	"github.com/amenophis1er/gh-setup/internal/config"
 	ghclient "github.com/amenophis1er/gh-setup/internal/github"
+	"github.com/amenophis1er/gh-setup/internal/gitutil"
 	"github.com/amenophis1er/gh-setup/internal/templates"
 	"github.com/charmbracelet/huh"
 	gh "github.com/google/go-github/v68/github"
@@ -130,6 +133,7 @@ func applyRepo(client ghclient.GitHubClient, cfg *config.Config, owner string, i
 				return fmt.Errorf("creating repo %s: %w", repo.Name, err)
 			}
 			logSuccess("created", "repo "+repo.Name)
+			maybeAddOrigin(owner, repo.Name, opts)
 		}
 	} else {
 		private := visibility == "private"
@@ -581,4 +585,34 @@ func confirm(msg string, opts Options) bool {
 		return false
 	}
 	return yes
+}
+
+// maybeAddOrigin adds a git remote "origin" pointing to the newly created repo,
+// but only when the current directory is a git repo with no origin and the
+// directory name matches the repo name.
+func maybeAddOrigin(owner, repoName string, opts Options) {
+	if !gitutil.IsInsideGitRepo() || gitutil.HasRemote("origin") {
+		return
+	}
+
+	dir, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	if filepath.Base(dir) != repoName {
+		return
+	}
+
+	url := fmt.Sprintf("git@github.com:%s/%s.git", owner, repoName)
+
+	if opts.DryRun {
+		logDryRun("add remote origin", url)
+		return
+	}
+
+	if err := gitutil.AddRemote("origin", url); err != nil {
+		logError("add remote", "origin", err)
+		return
+	}
+	logSuccess("added remote origin", url)
 }

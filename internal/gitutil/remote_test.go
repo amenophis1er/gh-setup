@@ -1,6 +1,9 @@
 package gitutil
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 )
 
@@ -36,5 +39,65 @@ func TestRemoteRegex(t *testing.T) {
 				t.Errorf("expected %q not to match, got %v", tt.url, m)
 			}
 		}
+	}
+}
+
+func TestIsInsideGitRepo(t *testing.T) {
+	// We're running inside the gh-setup repo, so this should be true.
+	if !IsInsideGitRepo() {
+		t.Error("expected IsInsideGitRepo() to return true inside a git repo")
+	}
+}
+
+func TestIsInsideGitRepoOutside(t *testing.T) {
+	dir := t.TempDir()
+	orig, _ := os.Getwd()
+	defer func() { _ = os.Chdir(orig) }()
+	_ = os.Chdir(dir)
+
+	if IsInsideGitRepo() {
+		t.Error("expected IsInsideGitRepo() to return false outside a git repo")
+	}
+}
+
+func TestHasRemote(t *testing.T) {
+	// The gh-setup repo has origin.
+	if !HasRemote("origin") {
+		t.Error("expected HasRemote(\"origin\") to return true")
+	}
+	if HasRemote("nonexistent-remote") {
+		t.Error("expected HasRemote(\"nonexistent-remote\") to return false")
+	}
+}
+
+func TestAddRemote(t *testing.T) {
+	dir := t.TempDir()
+	orig, _ := os.Getwd()
+	defer func() { _ = os.Chdir(orig) }()
+
+	// Init a bare git repo in the temp dir.
+	_ = os.Chdir(dir)
+	if err := exec.Command("git", "init").Run(); err != nil {
+		t.Fatalf("git init: %v", err)
+	}
+
+	if HasRemote("origin") {
+		t.Fatal("expected no origin remote in fresh repo")
+	}
+
+	url := "git@github.com:testuser/testrepo.git"
+	if err := AddRemote("origin", url); err != nil {
+		t.Fatalf("AddRemote: %v", err)
+	}
+
+	if !HasRemote("origin") {
+		t.Error("expected origin remote after AddRemote")
+	}
+
+	// Verify the URL matches.
+	out, _ := exec.Command("git", "remote", "get-url", "origin").Output()
+	got := filepath.Clean(string(out[:len(out)-1])) // trim newline
+	if got != url {
+		t.Errorf("expected remote URL %q, got %q", url, got)
 	}
 }
